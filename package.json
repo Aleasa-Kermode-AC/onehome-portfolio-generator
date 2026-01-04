@@ -1,0 +1,24 @@
+{
+  "name": "onehome-portfolio-generator",
+  "version": "1.0.0",
+  "description": "OneHome Education Learning Portfolio Generator API",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["homeschool", "portfolio", "education", "NSW", "NESA"],
+  "author": "Affirming Connections",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "express": "^4.18.2",
+    "docx": "^8.5.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
