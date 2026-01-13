@@ -48,6 +48,18 @@ app.post('/generate-portfolio', async (req, res) => {
     let evidenceList = portfolioData.evidenceEntries || [];
     console.log('Initial evidenceList type:', typeof evidenceList);
     
+    // If it's a string, parse it as JSON
+    if (typeof evidenceList === 'string') {
+      console.log('Parsing evidenceEntries from JSON string');
+      try {
+        evidenceList = JSON.parse(evidenceList);
+        console.log('Parsed evidenceList, is array?:', Array.isArray(evidenceList));
+      } catch (e) {
+        console.error('Failed to parse evidenceEntries:', e.message);
+        evidenceList = [];
+      }
+    }
+    
     // If it's an object, try to convert it to an array
     if (!Array.isArray(evidenceList) && typeof evidenceList === 'object') {
       console.log('Converting evidenceEntries object to array');
@@ -62,6 +74,20 @@ app.post('/generate-portfolio', async (req, res) => {
     
     // Same for curriculum outcomes
     let outcomesList = portfolioData.curriculumOutcomes || [];
+    console.log('Initial outcomesList type:', typeof outcomesList);
+    
+    // If it's a string, parse it as JSON
+    if (typeof outcomesList === 'string') {
+      console.log('Parsing curriculumOutcomes from JSON string');
+      try {
+        outcomesList = JSON.parse(outcomesList);
+        console.log('Parsed outcomesList, is array?:', Array.isArray(outcomesList));
+      } catch (e) {
+        console.error('Failed to parse curriculumOutcomes:', e.message);
+        outcomesList = [];
+      }
+    }
+    
     if (!Array.isArray(outcomesList) && typeof outcomesList === 'object') {
       console.log('Converting curriculumOutcomes object to array');
       if (outcomesList.array) {
