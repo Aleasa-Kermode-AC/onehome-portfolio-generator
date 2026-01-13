@@ -187,7 +187,7 @@ function selectDiverseEvidence(evidenceByArea, maxTotal = 30) {
   const maxPerArea = 5;
   
   Object.entries(evidenceByArea).forEach(([area, evidenceList]) => {
-    if (!evidenceList || evidenceList.length === 0) return;
+    if (!Array.isArray(evidenceList) || evidenceList.length === 0) return;
     
     // Sort by engagement level and take most engaged + spread across dates
     const sorted = evidenceList.sort((a, b) => {
@@ -207,6 +207,7 @@ function generateEvidenceStatistics(evidenceByArea, selectedEvidence) {
   const stats = {};
   
   Object.entries(evidenceByArea).forEach(([area, fullList]) => {
+    if (!Array.isArray(fullList)) return;
     const selectedList = selectedEvidence[area] || [];
     const total = fullList.length;
     const shown = selectedList.length;
@@ -228,8 +229,9 @@ function identifyUnaddressedOutcomes(allOutcomes, evidenceByArea) {
   const addressedCodes = new Set();
   
   Object.values(evidenceByArea).forEach(evidenceList => {
+    if (!Array.isArray(evidenceList)) return;
     evidenceList.forEach(evidence => {
-      if (evidence.matchedOutcomes) {
+      if (evidence && evidence.matchedOutcomes && Array.isArray(evidence.matchedOutcomes)) {
         evidence.matchedOutcomes.forEach(outcome => {
           addressedCodes.add(outcome.code);
         });
@@ -357,7 +359,12 @@ function generateEvidenceSections(evidenceByArea, allOutcomes) {
   }
   
   Object.entries(selectedEvidence).forEach(([area, evidenceList]) => {
-    if (!evidenceList || evidenceList.length === 0) return;
+    // Ensure evidenceList is an array
+    if (!Array.isArray(evidenceList)) {
+      console.log(`Warning: evidenceList for ${area} is not an array, skipping`);
+      return;
+    }
+    if (evidenceList.length === 0) return;
     
     sections.push(
       new Paragraph({
