@@ -552,11 +552,11 @@ function generatePortfolio(portfolioData) {
     parentName,
     state,
     curriculum,
-    learningAreaOverviews,
-    evidenceByArea,
-    progressAssessment,
-    futurePlans,
-    allOutcomes // Array of all curriculum outcomes for this stage
+    learningAreaOverviews = {},
+    evidenceByArea = {},
+    progressAssessment = {},
+    futurePlans = {},
+    allOutcomes = [] // Array of all curriculum outcomes for this stage
   } = portfolioData;
 
   const curriculumTerm = getCurriculumTerm(state);
@@ -786,7 +786,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.cognitive)]
+          children: [new TextRun(progressAssessment.cognitive || "No assessment provided.")]
         }),
 
         new Paragraph({
@@ -795,7 +795,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.social)]
+          children: [new TextRun(progressAssessment.social || "No assessment provided.")]
         }),
 
         new Paragraph({
@@ -804,7 +804,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.emotional)]
+          children: [new TextRun(progressAssessment.emotional || "No assessment provided.")]
         }),
 
         new Paragraph({
@@ -813,7 +813,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.physical)]
+          children: [new TextRun(progressAssessment.physical || "No assessment provided.")]
         }),
 
         new Paragraph({ children: [new PageBreak()] }),
@@ -823,30 +823,30 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(futurePlans.overview)]
+          children: [new TextRun(futurePlans.overview || "No future plans overview provided.")]
         }),
 
         new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun("5.1 Learning Goals")]
         }),
-        ...futurePlans.goals.map(goal => 
+        ...(Array.isArray(futurePlans.goals) ? futurePlans.goals.map(goal => 
           new Paragraph({
             numbering: { reference: "bullet-list", level: 0 },
-            children: [new TextRun(goal)]
+            children: [new TextRun(goal || "")]
           })
-        ),
+        ) : [new Paragraph({ children: [new TextRun("No learning goals specified.")] })]),
 
         new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun("5.2 Planned Strategies")]
         }),
-        ...futurePlans.strategies.map(strategy =>
+        ...(Array.isArray(futurePlans.strategies) ? futurePlans.strategies.map(strategy =>
           new Paragraph({
             numbering: { reference: "bullet-list", level: 0 },
-            children: [new TextRun(strategy)]
+            children: [new TextRun(strategy || "")]
           })
-        ),
+        ) : [new Paragraph({ children: [new TextRun("No strategies specified.")] })]),
         new Paragraph({ children: [new PageBreak()] }),
         new Paragraph({
           heading: HeadingLevel.HEADING_1,
