@@ -44,59 +44,80 @@ app.post('/generate-portfolio', async (req, res) => {
       });
     }
     
-    // Convert evidence entries if needed
-    let evidenceList = portfolioData.evidenceEntries || [];
-    console.log('Initial evidenceList type:', typeof evidenceList);
-    
-    // If it's a string, parse it as JSON
-    if (typeof evidenceList === 'string') {
-      console.log('Parsing evidenceEntries from JSON string');
-      try {
-        evidenceList = JSON.parse(evidenceList);
-        console.log('Parsed evidenceList, is array?:', Array.isArray(evidenceList));
-      } catch (e) {
-        console.error('Failed to parse evidenceEntries:', e.message);
-        evidenceList = [];
+    // Helper function to robustly parse Make.com data
+    function parseMakeComData(data, fieldName) {
+      console.log(`Parsing ${fieldName}, type:`, typeof data);
+      
+      // Already an array - return it
+      if (Array.isArray(data)) {
+        console.log(`${fieldName} is already array, length:`, data.length);
+        return data;
       }
+      
+      // Null/undefined - return empty array
+      if (!data) {
+        console.log(`${fieldName} is null/undefined`);
+        return [];
+      }
+      
+      // String - try to parse as JSON (handles double-encoding)
+      if (typeof data === 'string') {
+        console.log(`${fieldName} is string, attempting to parse...`);
+        let parsed = data;
+        let attempts = 0;
+        
+        // Sometimes Make.com double or triple encodes - keep parsing until we get an object/array
+        while (typeof parsed === 'string' && attempts < 5) {
+          try {
+            parsed = JSON.parse(parsed);
+            attempts++;
+            console.log(`Parse attempt ${attempts} succeeded, new type:`, typeof parsed);
+          } catch (e) {
+            console.error(`Parse attempt ${attempts} failed:`, e.message);
+            break;
+          }
+        }
+        
+        // If we got an array, return it
+        if (Array.isArray(parsed)) {
+          console.log(`${fieldName} parsed to array, length:`, parsed.length);
+          return parsed;
+        }
+        
+        // If we got an object, try to extract array
+        if (parsed && typeof parsed === 'object') {
+          if (parsed.array && Array.isArray(parsed.array)) {
+            console.log(`${fieldName} has array property, length:`, parsed.array.length);
+            return parsed.array;
+          }
+          // Try to convert object values to array
+          const values = Object.values(parsed).filter(item => item && typeof item === 'object');
+          console.log(`${fieldName} converted object to array, length:`, values.length);
+          return values;
+        }
+        
+        console.log(`${fieldName} could not be parsed, returning empty array`);
+        return [];
+      }
+      
+      // Object - try to extract array
+      if (typeof data === 'object') {
+        if (data.array && Array.isArray(data.array)) {
+          console.log(`${fieldName} has array property, length:`, data.array.length);
+          return data.array;
+        }
+        const values = Object.values(data).filter(item => item && typeof item === 'object');
+        console.log(`${fieldName} converted object to array, length:`, values.length);
+        return values;
+      }
+      
+      console.log(`${fieldName} unknown format, returning empty array`);
+      return [];
     }
     
-    // If it's an object, try to convert it to an array
-    if (!Array.isArray(evidenceList) && typeof evidenceList === 'object') {
-      console.log('Converting evidenceEntries object to array');
-      // Try to extract array values
-      if (evidenceList.array) {
-        evidenceList = evidenceList.array;
-      } else {
-        evidenceList = Object.values(evidenceList).filter(item => item && typeof item === 'object');
-      }
-      console.log('Converted evidenceList length:', evidenceList.length);
-    }
-    
-    // Same for curriculum outcomes
-    let outcomesList = portfolioData.curriculumOutcomes || [];
-    console.log('Initial outcomesList type:', typeof outcomesList);
-    
-    // If it's a string, parse it as JSON
-    if (typeof outcomesList === 'string') {
-      console.log('Parsing curriculumOutcomes from JSON string');
-      try {
-        outcomesList = JSON.parse(outcomesList);
-        console.log('Parsed outcomesList, is array?:', Array.isArray(outcomesList));
-      } catch (e) {
-        console.error('Failed to parse curriculumOutcomes:', e.message);
-        outcomesList = [];
-      }
-    }
-    
-    if (!Array.isArray(outcomesList) && typeof outcomesList === 'object') {
-      console.log('Converting curriculumOutcomes object to array');
-      if (outcomesList.array) {
-        outcomesList = outcomesList.array;
-      } else {
-        outcomesList = Object.values(outcomesList).filter(item => item && typeof item === 'object');
-      }
-      console.log('Converted outcomesList length:', outcomesList.length);
-    }
+    // Parse both arrays
+    const evidenceList = parseMakeComData(portfolioData.evidenceEntries, 'evidenceEntries');
+    const outcomesList = parseMakeComData(portfolioData.curriculumOutcomes, 'curriculumOutcomes');
     
     // Update the portfolioData with converted arrays
     portfolioData.evidenceEntries = evidenceList;
