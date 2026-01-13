@@ -891,11 +891,11 @@ function generateResourcesList(evidenceByArea, type, additionalResources = []) {
   };
   
   // Collect resources from evidence
-  if (type === 'used') {
+  if (type === 'used' && evidenceByArea && typeof evidenceByArea === 'object') {
     Object.values(evidenceByArea).forEach(evidenceList => {
-      if (!evidenceList) return;
+      if (!Array.isArray(evidenceList)) return;
       evidenceList.forEach(evidence => {
-        if (evidence.resources) {
+        if (evidence && evidence.resources && Array.isArray(evidence.resources)) {
           evidence.resources.forEach(resource => {
             // Categorize resource
             const category = categorizeResource(resource);
@@ -907,7 +907,7 @@ function generateResourcesList(evidenceByArea, type, additionalResources = []) {
   }
   
   // Add additional planned resources
-  if (type === 'planned' && additionalResources && additionalResources.length > 0) {
+  if (type === 'planned' && Array.isArray(additionalResources) && additionalResources.length > 0) {
     additionalResources.forEach(resource => {
       const category = categorizeResource(resource);
       resourceCategories[category].add(resource);
