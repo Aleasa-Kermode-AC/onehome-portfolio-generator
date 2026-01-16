@@ -135,12 +135,25 @@ app.post('/generate-portfolio', async (req, res) => {
     
     console.log('Portfolio generated successfully, size:', buffer.length, 'bytes');
     
-    // Return as downloadable file
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.setHeader('Content-Disposition', `attachment; filename="${portfolioData.childName}-Portfolio-${portfolioData.reportingPeriod.replace(/[^a-zA-Z0-9]/g, '-')}.docx"`);
-    res.setHeader('Content-Length', buffer.length);
+    // Create safe filename (remove all special characters and limit length)
+    const safeName = portfolioData.childName.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 50);
+    const safePeriod = portfolioData.reportingPeriod.replace(/[^a-zA-Z0-9]/g, '-').substring(0, 30);
+    const filename = `${safeName}-Portfolio-${safePeriod}.docx`;
     
-    res.send(buffer);
+    console.log('Sending file with name:', filename);
+    
+    // Convert buffer to base64
+    const base64Data = buffer.toString('base64');
+    
+    console.log('File converted to base64, length:', base64Data.length);
+    
+    // Return as JSON with base64-encoded file
+    res.json({
+      success: true,
+      filename: filename,
+      fileData: base64Data,
+      fileSize: buffer.length
+    });
     
   } catch (error) {
     console.error('=== ERROR ===');
