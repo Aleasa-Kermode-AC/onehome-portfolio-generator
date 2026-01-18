@@ -1,5 +1,6 @@
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, 
-        LevelFormat, PageBreak, Table, TableRow, TableCell, WidthType, BorderStyle } = require('docx');
+        LevelFormat, PageBreak, Table, TableRow, TableCell, WidthType, BorderStyle,
+        ImageRun } = require('docx');
 
 /**
  * OneHome Education Portfolio Generator
@@ -804,20 +805,99 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
       );
     }
     
-    // Add photo if available
-    if (evidence.photo || evidence.photoUrl || evidence.image) {
-      const photoUrl = evidence.photo || evidence.photoUrl || evidence.image;
+    // Add attachments/photos if available
+    const attachments = evidence.attachments;
+    if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       sections.push(
         new Paragraph({
           spacing: { before: 60, after: 60 },
           children: [
-            new TextRun({ text: "Photo: ", bold: true }),
-            new TextRun({ text: "[Photo attached]", italics: true })
+            new TextRun({ text: "Evidence Photos:", bold: true })
           ]
         })
       );
-      // Note: Actual image embedding requires fetching the image and using ImageRun
-      // This would need to be implemented if photos are stored as URLs
+      
+      // Embed each image
+      attachments.forEach((att) => {
+        if (att.buffer) {
+          try {
+            // Determine image type from mime type
+            let imageType = 'jpeg';
+            if (att.mimeType) {
+              if (att.mimeType.includes('png')) imageType = 'png';
+              else if (att.mimeType.includes('gif')) imageType = 'gif';
+              else if (att.mimeType.includes('webp')) imageType = 'png'; // Fallback webp to png
+            }
+            
+            // Calculate dimensions to fit nicely in document
+            // Max width 400px, maintain aspect ratio
+            let width = att.width || 400;
+            let height = att.height || 300;
+            const maxWidth = 400;
+            const maxHeight = 400;
+            
+            if (width > maxWidth) {
+              const ratio = maxWidth / width;
+              width = maxWidth;
+              height = Math.round(height * ratio);
+            }
+            if (height > maxHeight) {
+              const ratio = maxHeight / height;
+              height = maxHeight;
+              width = Math.round(width * ratio);
+            }
+            
+            sections.push(
+              new Paragraph({
+                spacing: { after: 60 },
+                children: [
+                  new ImageRun({
+                    data: att.buffer,
+                    transformation: {
+                      width: width,
+                      height: height
+                    },
+                    type: imageType
+                  })
+                ]
+              })
+            );
+            
+            // Add filename caption
+            if (att.filename) {
+              sections.push(
+                new Paragraph({
+                  spacing: { after: 60 },
+                  children: [
+                    new TextRun({ text: att.filename, italics: true, size: 20 })
+                  ]
+                })
+              );
+            }
+          } catch (imgError) {
+            console.error('Error embedding image:', imgError.message);
+            // Fallback to text if image embedding fails
+            sections.push(
+              new Paragraph({
+                spacing: { after: 30 },
+                children: [
+                  new TextRun({ text: `📷 ${att.filename || 'Photo'}`, italics: true })
+                ]
+              })
+            );
+          }
+        } else if (att.filename) {
+          // No buffer but have filename - show placeholder
+          sections.push(
+            new Paragraph({
+              spacing: { after: 30 },
+              children: [
+                new TextRun({ text: `📷 ${att.filename}`, italics: true })
+              ]
+            })
+          );
+        }
+      });
     }
     
     // Add spacing after each entry
