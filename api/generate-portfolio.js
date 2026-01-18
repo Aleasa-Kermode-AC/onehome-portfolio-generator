@@ -10,7 +10,13 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
  */
 async function fetchImageAsBuffer(url) {
   try {
-    const response = await fetch(url);
+    // Set a timeout for image fetching (10 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+    
     if (!response.ok) {
       console.error('Failed to fetch image:', response.status);
       return null;
@@ -33,21 +39,24 @@ async function processAttachments(attachments) {
   
   const processedImages = [];
   
-  for (const att of attachments) {
-    // Check if it's an image
-    const mimeType = att['MIME type'] || att.type || '';
-    if (!mimeType.startsWith('image/')) {
-      continue;
-    }
-    
-    // Use thumbnail for smaller file size in document (Large size is good balance)
-    const imageUrl = att.Thumbnails?.Large?.URL || att.URL || att.url;
-    const width = att.Thumbnails?.Large?.Width || att.Width || 400;
-    const height = att.Thumbnails?.Large?.Height || att.Height || 300;
-    
-    if (!imageUrl) continue;
-    
+  // Limit to first 3 images per evidence to avoid timeout
+  const limitedAttachments = attachments.slice(0, 3);
+  
+  for (const att of limitedAttachments) {
     try {
+      // Check if it's an image
+      const mimeType = att['MIME type'] || att.type || '';
+      if (!mimeType.startsWith('image/')) {
+        continue;
+      }
+      
+      // Use thumbnail for smaller file size in document (Large size is good balance)
+      const imageUrl = att.Thumbnails?.Large?.URL || att.URL || att.url;
+      const width = att.Thumbnails?.Large?.Width || att.Width || 400;
+      const height = att.Thumbnails?.Large?.Height || att.Height || 300;
+      
+      if (!imageUrl) continue;
+      
       console.log(`Fetching image: ${att['File name'] || 'unknown'}`);
       const imageBuffer = await fetchImageAsBuffer(imageUrl);
       
@@ -62,6 +71,7 @@ async function processAttachments(attachments) {
       }
     } catch (error) {
       console.error('Error processing attachment:', error.message);
+      // Continue with other attachments instead of crashing
     }
   }
   
@@ -262,6 +272,7 @@ module.exports = async (req, res) => {
 
   try {
     console.log('=== PORTFOLIO GENERATION REQUEST ===');
+    console.log('Request received at:', new Date().toISOString());
     
     let portfolioData = req.body;
     
@@ -358,7 +369,8 @@ module.exports = async (req, res) => {
       console.log('Building evidenceByArea from evidenceEntries...');
       portfolioData.evidenceByArea = {};
       
-      portfolioData.evidenceEntries.forEach(entry => {
+      // Process each evidence entry - using for...of to support await
+      for (const entry of portfolioData.evidenceEntries) {
         // Get learning areas - could be array or string
         let areas = entry['Learning Areas'] || entry.learningAreas || [];
         if (typeof areas === 'string') {
@@ -368,12 +380,42 @@ module.exports = async (req, res) => {
           areas = [areas];
         }
         
-        areas.forEach(area => {
-          if (!area) return;
+        // Process attachments once per entry (not per area)
+        let processedAttachments = [];
+        try {
+          const rawAttachments = entry.Attachments || entry.attachments || [];
+          if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
+            processedAttachments = await processAttachments(rawAttachments);
+            console.log(`Processed ${processedAttachments.length} images for "${entry.Title || 'Untitled'}"`);
+          }
+        } catch (attachError) {
+          console.error('Error processing attachments, skipping images:', attachError.message);
+          processedAttachments = [];
+        }
+        
+        // Get outcome codes - could be array (from Make.com) or string (from rollup)
+        let outcomeCodesData = entry['Outcome Code Rollup (from Matched Outcomes 3)'] || 
+                               entry['Outcome Code Rollup'] ||
+                               entry['Outcome Codes Text'] ||
+                               entry.outcomeCodesText ||
+                               entry['Matched Outcomes 3'] || 
+                               entry.matchedOutcomes || [];
+        
+        // If it's an array of strings, join them; if it's already a string, use as-is
+        let outcomeCodesString = '';
+        if (Array.isArray(outcomeCodesData)) {
+          outcomeCodesString = outcomeCodesData.join(', ');
+        } else if (typeof outcomeCodesData === 'string') {
+          outcomeCodesString = outcomeCodesData;
+        }
+        
+        // Add to each learning area
+        for (const area of areas) {
+          if (!area) continue;
           
           // Skip numeric or invalid area names
           if (area === '0' || area === '1' || /^\d+$/.test(String(area))) {
-            return;
+            continue;
           }
           
           // Normalise area name
@@ -383,41 +425,16 @@ module.exports = async (req, res) => {
             portfolioData.evidenceByArea[normalizedArea] = [];
           }
           
-          // Format the evidence entry
-          // Get outcome codes - could be array (from Make.com) or string (from rollup)
-          let outcomeCodesData = entry['Outcome Code Rollup (from Matched Outcomes 3)'] || 
-                                 entry['Outcome Code Rollup'] ||
-                                 entry['Outcome Codes Text'] ||
-                                 entry.outcomeCodesText ||
-                                 entry['Matched Outcomes 3'] || 
-                                 entry.matchedOutcomes || [];
-          
-          // If it's an array of strings, join them; if it's already a string, use as-is
-          let outcomeCodesString = '';
-          if (Array.isArray(outcomeCodesData)) {
-            outcomeCodesString = outcomeCodesData.join(', ');
-          } else if (typeof outcomeCodesData === 'string') {
-            outcomeCodesString = outcomeCodesData;
-          }
-          
-          // Process attachments if available
-          let processedAttachments = [];
-          const rawAttachments = entry.Attachments || entry.attachments || [];
-          if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
-            processedAttachments = await processAttachments(rawAttachments);
-          }
-          
           portfolioData.evidenceByArea[normalizedArea].push({
             title: entry.Title || entry.title || 'Untitled',
             date: formatDate(entry.Date || entry.date),
             description: entry['What Happened?'] || entry.whatHappened || entry.description || '',
             engagement: entry['Child Engagement'] || entry.childEngagement || entry.engagement || '',
             matchedOutcomes: outcomeCodesString,
-            // Include processed attachments with image buffers
             attachments: processedAttachments
           });
-        });
-      });
+        }
+      }
       
       console.log('Built evidenceByArea with areas:', Object.keys(portfolioData.evidenceByArea));
       console.log('Evidence counts per area:', Object.fromEntries(
