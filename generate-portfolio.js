@@ -437,6 +437,11 @@ function generatePortfolio(portfolioData) {
 function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, curriculumOutcomes, yearLevel, curriculumTermCap, childName) {
   const sections = [];
   
+  // Ensure evidenceByArea is an object
+  if (!evidenceByArea || typeof evidenceByArea !== 'object') {
+    evidenceByArea = {};
+  }
+  
   // Define standard learning areas for NSW
   const standardAreas = [
     'English',
@@ -458,14 +463,18 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
   
   allAreas.forEach(area => {
     // Skip non-standard areas that have no content
+    const areaEvidence = evidenceByArea[area];
+    const evidenceArray = Array.isArray(areaEvidence) ? areaEvidence : 
+                          (areaEvidence && typeof areaEvidence === 'object') ? Object.values(areaEvidence) : [];
+    
     if (!standardAreas.includes(area) && 
         !learningAreaOverviews[area] && 
-        (!evidenceByArea[area] || evidenceByArea[area].length === 0)) {
+        evidenceArray.length === 0) {
       return;
     }
     
     const overview = learningAreaOverviews[area] || {};
-    const evidence = evidenceByArea[area] || [];
+    const evidence = evidenceArray;
     const areaOutcomes = (curriculumOutcomes || []).filter(o => 
       normalizeAreaName(o['Learning Area'] || o.learningArea) === area
     );
@@ -557,7 +566,7 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
 function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
   const sections = [];
   
-  if (!evidenceByArea || Object.keys(evidenceByArea).length === 0) {
+  if (!evidenceByArea || typeof evidenceByArea !== 'object' || Object.keys(evidenceByArea).length === 0) {
     sections.push(
       new Paragraph({
         spacing: { after: 120 },
@@ -573,7 +582,17 @@ function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
   let sectionNum = 1;
   
   Object.entries(evidenceByArea).forEach(([area, evidenceList]) => {
-    if (!evidenceList || evidenceList.length === 0) return;
+    // Ensure evidenceList is an array
+    if (!evidenceList) return;
+    if (!Array.isArray(evidenceList)) {
+      // Try to convert to array if it's an object
+      if (typeof evidenceList === 'object') {
+        evidenceList = Object.values(evidenceList);
+      } else {
+        return;
+      }
+    }
+    if (evidenceList.length === 0) return;
     
     sections.push(
       new Paragraph({
