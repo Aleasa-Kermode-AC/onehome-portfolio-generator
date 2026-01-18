@@ -817,32 +817,7 @@ function normalizeAreaName(area) {
  */
 function extractResourcesFromEvidence(evidenceByArea) {
   const resources = new Set();
-  
-  // Common resource patterns to look for
-  const resourcePatterns = [
-    // Apps and software
-    /\bapp[s]?\s+['"]?([^'".,]+)['"]?/gi,
-    /\busing\s+(?:the\s+)?(?:app\s+)?['"]?([A-Z][a-zA-Z\s]+)['"]?/gi,
-    // Games
-    /\b(?:played|playing)\s+(?:a\s+)?(?:game\s+)?(?:called\s+)?['"]?([A-Z][a-zA-Z\s]+)['"]?/gi,
-    /\bMinecraft\b/gi,
-    /\bRoblox\b/gi,
-    /\bLEGO\b/gi,
-    /\bLego\b/gi,
-    // Media
-    /\b(?:watched|watching)\s+(?:the\s+)?(?:movie\s+|film\s+|show\s+)?['"]?([A-Z][a-zA-Z\s]+)['"]?/gi,
-    /\bYouTube\b/gi,
-    // Platforms and tools
-    /\bFlight\s+Simulator\b/gi,
-    /\bGoogle\b/gi,
-    // Physical resources
-    /\bgeodes?\b/gi,
-    /\bpool\b/gi,
-    /\bswimming\s+pool\b/gi,
-    /\blibrary\b/gi,
-    // Educational
-    /\bpsychologist\b/gi,
-  ];
+  const addedLowerCase = new Set(); // Track lowercase versions to avoid duplicates
   
   // Known resources to extract (case-insensitive matching, proper case output)
   const knownResources = {
@@ -850,7 +825,7 @@ function extractResourcesFromEvidence(evidenceByArea) {
     'roblox': 'Roblox (digital game)',
     'lego': 'LEGO (construction toys)',
     'youtube': 'YouTube (video platform)',
-    'flight simulator': 'Flight Simulator app',
+    'flight simulator': 'Flight Simulator (app)',
     'flightradar': 'Flight tracking app',
     'pool': 'Local swimming pool',
     'swimming pool': 'Local swimming pool',
@@ -862,6 +837,15 @@ function extractResourcesFromEvidence(evidenceByArea) {
   
   if (!evidenceByArea || typeof evidenceByArea !== 'object') {
     return [];
+  }
+  
+  // Helper function to add resource without duplicates
+  function addResource(resourceName) {
+    const lowerName = resourceName.toLowerCase();
+    if (!addedLowerCase.has(lowerName)) {
+      addedLowerCase.add(lowerName);
+      resources.add(resourceName);
+    }
   }
   
   // Go through all evidence
@@ -876,20 +860,9 @@ function extractResourcesFromEvidence(evidenceByArea) {
       // Check for known resources
       Object.entries(knownResources).forEach(([pattern, resourceName]) => {
         if (combined.includes(pattern.toLowerCase())) {
-          resources.add(resourceName);
+          addResource(resourceName);
         }
       });
-      
-      // Extract apps mentioned with quotes
-      const appMatches = combined.match(/app\s+['"]([^'"]+)['"]/gi);
-      if (appMatches) {
-        appMatches.forEach(match => {
-          const appName = match.replace(/app\s+['"]?/i, '').replace(/['"]?$/, '');
-          if (appName.length > 2) {
-            resources.add(`${appName} (app)`);
-          }
-        });
-      }
     });
   });
   
