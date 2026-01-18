@@ -108,8 +108,7 @@ module.exports = async (req, res) => {
     
     // === FIX 6: Build evidenceByArea from evidenceEntries ===
     // Group evidence by learning area for the document sections
-    if (portfolioData.evidenceEntries.length > 0 && 
-        (!portfolioData.evidenceByArea || Object.keys(portfolioData.evidenceByArea).length === 0)) {
+    if (portfolioData.evidenceEntries.length > 0) {
       
       console.log('Building evidenceByArea from evidenceEntries...');
       portfolioData.evidenceByArea = {};
@@ -120,8 +119,13 @@ module.exports = async (req, res) => {
         if (typeof areas === 'string') {
           areas = areas.split(',').map(a => a.trim().replace(/"/g, ''));
         }
+        if (!Array.isArray(areas)) {
+          areas = [areas];
+        }
         
         areas.forEach(area => {
+          if (!area) return;
+          
           // Normalise area name
           const normalizedArea = normalizeAreaName(area);
           
@@ -141,6 +145,11 @@ module.exports = async (req, res) => {
       });
       
       console.log('Built evidenceByArea with areas:', Object.keys(portfolioData.evidenceByArea));
+      console.log('Evidence counts per area:', Object.fromEntries(
+        Object.entries(portfolioData.evidenceByArea).map(([k, v]) => [k, Array.isArray(v) ? v.length : 'not array'])
+      ));
+    } else {
+      portfolioData.evidenceByArea = {};
     }
     
     // === FIX 7: Build learningAreaOverviews from curriculumOutcomes ===
