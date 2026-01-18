@@ -155,7 +155,13 @@ module.exports = async (req, res) => {
             date: formatDate(entry.Date || entry.date),
             description: entry['What Happened?'] || entry.whatHappened || entry.description || '',
             engagement: entry['Child Engagement'] || entry.childEngagement || entry.engagement || '',
-            matchedOutcomes: entry['Matched Outcomes 3'] || entry.matchedOutcomes || []
+            // Use the new Outcome Code Rollup field, fall back to Matched Outcomes 3 if not available
+            matchedOutcomes: entry['Outcome Code Rollup (from Matched Outcomes 3)'] || 
+                            entry['Outcome Code Rollup'] ||
+                            entry['Outcome Codes Text'] ||
+                            entry.outcomeCodesText ||
+                            entry['Matched Outcomes 3'] || 
+                            entry.matchedOutcomes || []
           });
         });
       });
