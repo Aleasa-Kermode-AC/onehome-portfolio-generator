@@ -698,7 +698,8 @@ function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
       );
       
       // Add matched outcomes if available
-      if (evidence.matchedOutcomes && evidence.matchedOutcomes.length > 0) {
+      const matchedOutcomes = evidence.matchedOutcomes;
+      if (matchedOutcomes && (Array.isArray(matchedOutcomes) ? matchedOutcomes.length > 0 : matchedOutcomes.toString().trim() !== '')) {
         sections.push(
           new Paragraph({
             spacing: { after: 60 },
@@ -706,30 +707,50 @@ function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
           })
         );
         
-        // Handle matched outcomes - could be array of IDs or objects
-        evidence.matchedOutcomes.forEach(outcome => {
-          let outcomeText = '';
-          if (typeof outcome === 'string') {
-            // It's an ID - try to find the outcome details
-            const foundOutcome = (curriculumOutcomes || []).find(o => o.ID === outcome || o.id === outcome);
-            if (foundOutcome) {
-              outcomeText = `${foundOutcome['Outcome Title'] || foundOutcome.outcomeTitle}: ${foundOutcome['Outcome Description'] || foundOutcome.outcomeDescription}`;
-            } else {
-              outcomeText = outcome; // Just show the ID
+        // Handle outcomes - could be string (from rollup) or array
+        let outcomesList = [];
+        if (typeof matchedOutcomes === 'string') {
+          // It's a comma-separated string from the rollup field
+          // Format: "English - Stage 2 - EN2-OLC-01, English - Stage 2 - EN2-HANDW-01"
+          outcomesList = matchedOutcomes.split(',').map(o => o.trim()).filter(o => o.length > 0);
+        } else if (Array.isArray(matchedOutcomes)) {
+          // Check if it's an array of record IDs or actual outcome objects
+          matchedOutcomes.forEach(outcome => {
+            if (typeof outcome === 'string') {
+              // Check if it's a record ID (starts with 'rec') or actual text
+              if (outcome.startsWith('rec') && outcome.length === 17) {
+                // Skip record IDs - we don't have the lookup data
+                return;
+              }
+              outcomesList.push(outcome);
+            } else if (typeof outcome === 'object') {
+              const text = `${outcome.code || outcome['Outcome Title'] || ''}: ${outcome.description || outcome['Outcome Description'] || ''}`;
+              if (text.trim() !== ':') {
+                outcomesList.push(text);
+              }
             }
-          } else if (typeof outcome === 'object') {
-            outcomeText = `${outcome.code || outcome['Outcome Title'] || ''}: ${outcome.description || outcome['Outcome Description'] || ''}`;
-          }
-          
-          if (outcomeText) {
+          });
+        }
+        
+        // Display the outcomes
+        if (outcomesList.length > 0) {
+          outcomesList.forEach(outcomeText => {
+            // Extract just the outcome code if it includes Learning Area prefix
+            // Format: "English - Stage 2 - EN2-OLC-01" -> "EN2-OLC-01"
+            let displayText = outcomeText;
+            const codeMatch = outcomeText.match(/([A-Z]{2,3}\d?-[A-Z]{2,4}-\d{2})/);
+            if (codeMatch) {
+              displayText = codeMatch[1];
+            }
+            
             sections.push(
               new Paragraph({
                 numbering: { reference: "bullet-list", level: 0 },
-                children: [new TextRun(outcomeText)]
+                children: [new TextRun(displayText)]
               })
             );
-          }
-        });
+          });
+        }
       }
       
       // Add engagement level if available
