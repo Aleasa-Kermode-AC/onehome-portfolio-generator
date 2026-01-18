@@ -150,18 +150,28 @@ module.exports = async (req, res) => {
           }
           
           // Format the evidence entry
+          // Get outcome codes - could be array (from Make.com) or string (from rollup)
+          let outcomeCodesData = entry['Outcome Code Rollup (from Matched Outcomes 3)'] || 
+                                 entry['Outcome Code Rollup'] ||
+                                 entry['Outcome Codes Text'] ||
+                                 entry.outcomeCodesText ||
+                                 entry['Matched Outcomes 3'] || 
+                                 entry.matchedOutcomes || [];
+          
+          // If it's an array of strings, join them; if it's already a string, use as-is
+          let outcomeCodesString = '';
+          if (Array.isArray(outcomeCodesData)) {
+            outcomeCodesString = outcomeCodesData.join(', ');
+          } else if (typeof outcomeCodesData === 'string') {
+            outcomeCodesString = outcomeCodesData;
+          }
+          
           portfolioData.evidenceByArea[normalizedArea].push({
             title: entry.Title || entry.title || 'Untitled',
             date: formatDate(entry.Date || entry.date),
             description: entry['What Happened?'] || entry.whatHappened || entry.description || '',
             engagement: entry['Child Engagement'] || entry.childEngagement || entry.engagement || '',
-            // Use the new Outcome Code Rollup field, fall back to Matched Outcomes 3 if not available
-            matchedOutcomes: entry['Outcome Code Rollup (from Matched Outcomes 3)'] || 
-                            entry['Outcome Code Rollup'] ||
-                            entry['Outcome Codes Text'] ||
-                            entry.outcomeCodesText ||
-                            entry['Matched Outcomes 3'] || 
-                            entry.matchedOutcomes || []
+            matchedOutcomes: outcomeCodesString
           });
         });
       });
