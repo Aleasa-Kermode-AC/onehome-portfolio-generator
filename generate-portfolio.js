@@ -479,6 +479,48 @@ function generatePortfolio(portfolioData) {
 
   // Create the document
   const doc = new Document({
+    styles: {
+      default: {
+        document: {
+          run: {
+            font: "Aptos",
+            size: 24 // 12pt
+          }
+        },
+        heading1: {
+          run: {
+            font: "Aptos",
+            size: 32,
+            bold: true,
+            color: "2E74B5"
+          },
+          paragraph: {
+            spacing: { before: 240, after: 120 }
+          }
+        },
+        heading2: {
+          run: {
+            font: "Aptos",
+            size: 26,
+            bold: true,
+            color: "2E74B5"
+          },
+          paragraph: {
+            spacing: { before: 200, after: 80 }
+          }
+        },
+        heading3: {
+          run: {
+            font: "Aptos",
+            size: 24,
+            bold: true
+          },
+          paragraph: {
+            spacing: { before: 160, after: 60 }
+          }
+        }
+      }
+    },
     numbering: {
       config: [
         {
@@ -492,6 +534,9 @@ function generatePortfolio(portfolioData) {
               style: {
                 paragraph: {
                   indent: { left: 720, hanging: 360 }
+                },
+                run: {
+                  font: "Aptos"
                 }
               }
             }
@@ -722,23 +767,60 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
   
   // Generate sections for each unique evidence entry
   uniqueEvidence.forEach((evidence, idx) => {
+    // Add a horizontal line separator before each entry (except the first)
+    if (idx > 0) {
+      sections.push(
+        new Paragraph({
+          spacing: { before: 240, after: 240 },
+          border: {
+            bottom: {
+              color: "CCCCCC",
+              space: 1,
+              style: BorderStyle.SINGLE,
+              size: 6
+            }
+          },
+          children: []
+        })
+      );
+    }
+    
+    // Evidence title with background styling
     sections.push(
       new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun(`3.${idx + 1} ${evidence.title || `Evidence ${idx + 1}`}`)]
-      }),
-      new Paragraph({
-        spacing: { after: 60 },
+        spacing: { before: 120, after: 80 },
+        shading: {
+          fill: "E8F4FC"
+        },
         children: [
-          new TextRun({ text: "Date: ", bold: true }),
-          new TextRun(evidence.date || 'Not specified')
+          new TextRun({ 
+            text: `${idx + 1}. ${evidence.title || `Evidence ${idx + 1}`}`,
+            bold: true,
+            size: 26,
+            font: "Aptos"
+          })
         ]
-      }),
+      })
+    );
+    
+    // Date
+    sections.push(
       new Paragraph({
         spacing: { after: 60 },
         children: [
-          new TextRun({ text: "Description: ", bold: true }),
-          new TextRun(evidence.description || 'No description provided.')
+          new TextRun({ text: "Date: ", bold: true, font: "Aptos" }),
+          new TextRun({ text: evidence.date || 'Not specified', font: "Aptos" })
+        ]
+      })
+    );
+    
+    // Description
+    sections.push(
+      new Paragraph({
+        spacing: { after: 80 },
+        children: [
+          new TextRun({ text: "Description: ", bold: true, font: "Aptos" }),
+          new TextRun({ text: evidence.description || 'No description provided.', font: "Aptos" })
         ]
       })
     );
@@ -776,8 +858,8 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
       if (filteredOutcomes.length > 0) {
         sections.push(
           new Paragraph({
-            spacing: { after: 60 },
-            children: [new TextRun({ text: "Syllabus Outcomes Addressed:", bold: true })]
+            spacing: { before: 60, after: 60 },
+            children: [new TextRun({ text: "Syllabus Outcomes Addressed:", bold: true, font: "Aptos" })]
           })
         );
         
@@ -785,7 +867,7 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
           sections.push(
             new Paragraph({
               numbering: { reference: "bullet-list", level: 0 },
-              children: [new TextRun(displayText)]
+              children: [new TextRun({ text: displayText, font: "Aptos" })]
             })
           );
         });
@@ -796,10 +878,10 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
     if (evidence.engagement) {
       sections.push(
         new Paragraph({
-          spacing: { before: 60, after: 60 },
+          spacing: { before: 60, after: 80 },
           children: [
-            new TextRun({ text: "Child Engagement: ", bold: true }),
-            new TextRun(evidence.engagement)
+            new TextRun({ text: "Child Engagement: ", bold: true, font: "Aptos" }),
+            new TextRun({ text: evidence.engagement, font: "Aptos" })
           ]
         })
       );
@@ -810,9 +892,9 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
       sections.push(
         new Paragraph({
-          spacing: { before: 60, after: 60 },
+          spacing: { before: 80, after: 60 },
           children: [
-            new TextRun({ text: "Evidence Photos:", bold: true })
+            new TextRun({ text: "Evidence Photos:", bold: true, font: "Aptos" })
           ]
         })
       );
@@ -826,11 +908,10 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
             if (att.mimeType) {
               if (att.mimeType.includes('png')) imageType = 'png';
               else if (att.mimeType.includes('gif')) imageType = 'gif';
-              else if (att.mimeType.includes('webp')) imageType = 'png'; // Fallback webp to png
+              else if (att.mimeType.includes('webp')) imageType = 'png';
             }
             
             // Calculate dimensions to fit nicely in document
-            // Max width 400px, maintain aspect ratio
             let width = att.width || 400;
             let height = att.height || 300;
             const maxWidth = 400;
@@ -849,7 +930,7 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
             
             sections.push(
               new Paragraph({
-                spacing: { after: 60 },
+                spacing: { after: 80 },
                 children: [
                   new ImageRun({
                     data: att.buffer,
@@ -862,45 +943,15 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
                 ]
               })
             );
-            
-            // Add filename caption
-            if (att.filename) {
-              sections.push(
-                new Paragraph({
-                  spacing: { after: 60 },
-                  children: [
-                    new TextRun({ text: att.filename, italics: true, size: 20 })
-                  ]
-                })
-              );
-            }
+            // No filename caption - removed as requested
           } catch (imgError) {
             console.error('Error embedding image:', imgError.message);
-            // Fallback to text if image embedding fails
-            sections.push(
-              new Paragraph({
-                spacing: { after: 30 },
-                children: [
-                  new TextRun({ text: `📷 ${att.filename || 'Photo'}`, italics: true })
-                ]
-              })
-            );
           }
-        } else if (att.filename) {
-          // No buffer but have filename - show placeholder
-          sections.push(
-            new Paragraph({
-              spacing: { after: 30 },
-              children: [
-                new TextRun({ text: `📷 ${att.filename}`, italics: true })
-              ]
-            })
-          );
         }
       });
     }
     
-    // Add spacing after each entry
+    // Add bottom spacing for the entry
     sections.push(
       new Paragraph({ spacing: { after: 120 }, children: [] })
     );
