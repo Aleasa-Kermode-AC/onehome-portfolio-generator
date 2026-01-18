@@ -6,6 +6,69 @@ const { put } = require('@vercel/blob');
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 /**
+ * Fetch image from URL and return as buffer
+ */
+async function fetchImageAsBuffer(url) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.error('Failed to fetch image:', response.status);
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.error('Error fetching image:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Process attachments and fetch image data
+ */
+async function processAttachments(attachments) {
+  if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
+    return [];
+  }
+  
+  const processedImages = [];
+  
+  for (const att of attachments) {
+    // Check if it's an image
+    const mimeType = att['MIME type'] || att.type || '';
+    if (!mimeType.startsWith('image/')) {
+      continue;
+    }
+    
+    // Use thumbnail for smaller file size in document (Large size is good balance)
+    const imageUrl = att.Thumbnails?.Large?.URL || att.URL || att.url;
+    const width = att.Thumbnails?.Large?.Width || att.Width || 400;
+    const height = att.Thumbnails?.Large?.Height || att.Height || 300;
+    
+    if (!imageUrl) continue;
+    
+    try {
+      console.log(`Fetching image: ${att['File name'] || 'unknown'}`);
+      const imageBuffer = await fetchImageAsBuffer(imageUrl);
+      
+      if (imageBuffer) {
+        processedImages.push({
+          buffer: imageBuffer,
+          filename: att['File name'] || att.filename || 'image.jpg',
+          width: Math.min(width, 400), // Cap width at 400px for document
+          height: Math.min(height, 500), // Cap height at 500px
+          mimeType: mimeType
+        });
+      }
+    } catch (error) {
+      console.error('Error processing attachment:', error.message);
+    }
+  }
+  
+  return processedImages;
+}
+
+/**
  * Call OpenAI API to generate text
  */
 async function callOpenAI(prompt, maxTokens = 300) {
@@ -337,14 +400,21 @@ module.exports = async (req, res) => {
             outcomeCodesString = outcomeCodesData;
           }
           
+          // Process attachments if available
+          let processedAttachments = [];
+          const rawAttachments = entry.Attachments || entry.attachments || [];
+          if (Array.isArray(rawAttachments) && rawAttachments.length > 0) {
+            processedAttachments = await processAttachments(rawAttachments);
+          }
+          
           portfolioData.evidenceByArea[normalizedArea].push({
             title: entry.Title || entry.title || 'Untitled',
             date: formatDate(entry.Date || entry.date),
             description: entry['What Happened?'] || entry.whatHappened || entry.description || '',
             engagement: entry['Child Engagement'] || entry.childEngagement || entry.engagement || '',
             matchedOutcomes: outcomeCodesString,
-            // Include photo if available (Airtable attachment field)
-            photo: entry.Photo || entry.Photos || entry.photo || entry.photos || entry.Image || entry.image || null
+            // Include processed attachments with image buffers
+            attachments: processedAttachments
           });
         });
       });
