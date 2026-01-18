@@ -3,131 +3,203 @@ const { Packer } = require('docx');
 const { put } = require('@vercel/blob');
 
 module.exports = async (req, res) => {
-  // Handle CORS
+  // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  
+
   // Handle preflight
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
+
   // Health check
   if (req.method === 'GET') {
     return res.status(200).json({ 
       status: 'healthy', 
       service: 'OneHome Education Portfolio Generator',
-      version: '1.0.0'
+      version: '1.2.0'
     });
   }
-  
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
-  
+
   try {
-    console.log('=== INCOMING REQUEST ===');
-    console.log('Request body type:', typeof req.body);
+    console.log('=== PORTFOLIO GENERATION REQUEST ===');
     
-    const portfolioData = req.body;
+    let portfolioData = req.body;
     
-    // Parse progressAssessment if it's a string
-    if (typeof portfolioData.progressAssessment === 'string') {
-      try {
-        portfolioData.progressAssessment = JSON.parse(portfolioData.progressAssessment);
-      } catch (e) {
-        console.log('Could not parse progressAssessment as JSON, using as-is');
-      }
+    // Log raw input for debugging
+    console.log('Raw parentname:', portfolioData.parentname);
+    console.log('Raw parentName:', portfolioData.parentName);
+    console.log('Raw futurePlans type:', typeof portfolioData.futurePlans);
+    console.log('Raw evidenceEntries type:', typeof portfolioData.evidenceEntries);
+    console.log('Raw curriculumOutcomes type:', typeof portfolioData.curriculumOutcomes);
+    
+    // === FIX 1: Handle parentName case sensitivity ===
+    // Accept both 'parentname' and 'parentName'
+    if (!portfolioData.parentName && portfolioData.parentname) {
+      portfolioData.parentName = portfolioData.parentname;
     }
+    console.log('Final parentName:', portfolioData.parentName);
     
-    // Parse futurePlans if it's a string
+    // === FIX 2: Parse futurePlans if it's a string ===
     if (typeof portfolioData.futurePlans === 'string') {
       try {
         portfolioData.futurePlans = JSON.parse(portfolioData.futurePlans);
+        console.log('Parsed futurePlans:', portfolioData.futurePlans);
       } catch (e) {
         console.log('Could not parse futurePlans as JSON, using as-is');
       }
     }
     
-    // Helper function to ensure data is in array format
-    function ensureArray(data, fieldName) {
-      console.log(`Parsing ${fieldName}, type:`, typeof data);
-      
-      if (Array.isArray(data)) {
-        console.log(`${fieldName} is already array, length:`, data.length);
-        return data;
+    // === FIX 3: Parse progressAssessment if it's a string ===
+    if (typeof portfolioData.progressAssessment === 'string') {
+      try {
+        portfolioData.progressAssessment = JSON.parse(portfolioData.progressAssessment);
+        console.log('Parsed progressAssessment:', portfolioData.progressAssessment);
+      } catch (e) {
+        console.log('Could not parse progressAssessment as JSON, using as-is');
       }
-      
-      if (!data) {
-        console.log(`${fieldName} is null/undefined`);
-        return [];
-      }
-      
-      if (typeof data === 'string') {
-        console.log(`${fieldName} is string, attempting to parse...`);
-        let parsed = data;
-        let attempts = 0;
-        
-        while (typeof parsed === 'string' && attempts < 5) {
-          try {
-            parsed = JSON.parse(parsed);
-            attempts++;
-            console.log(`Parse attempt ${attempts} succeeded, new type:`, typeof parsed);
-          } catch (e) {
-            console.error(`Parse attempt ${attempts} failed:`, e.message);
-            break;
-          }
-        }
-        
-        if (Array.isArray(parsed)) {
-          console.log(`${fieldName} parsed to array, length:`, parsed.length);
-          return parsed;
-        }
-        
-        if (parsed && typeof parsed === 'object') {
-          if (parsed.array && Array.isArray(parsed.array)) {
-            console.log(`${fieldName} has array property, length:`, parsed.array.length);
-            return parsed.array;
-          }
-          const values = Object.values(parsed).filter(item => item && typeof item === 'object');
-          console.log(`${fieldName} converted object to array, length:`, values.length);
-          return values;
-        }
-        
-        console.log(`${fieldName} could not be parsed, returning empty array`);
-        return [];
-      }
-      
-      if (typeof data === 'object') {
-        if (data.array && Array.isArray(data.array)) {
-          console.log(`${fieldName} has array property, length:`, data.array.length);
-          return data.array;
-        }
-        const values = Object.values(data).filter(item => item && typeof item === 'object');
-        console.log(`${fieldName} converted object to array, length:`, values.length);
-        return values;
-      }
-      
-      console.log(`${fieldName} unknown format, returning empty array`);
-      return [];
     }
     
-    // Parse arrays
-    const evidenceList = ensureArray(portfolioData.evidenceEntries, 'evidenceEntries');
-    const outcomesList = ensureArray(portfolioData.curriculumOutcomes, 'curriculumOutcomes');
+    // === FIX 4: Parse evidenceEntries if it's a string ===
+    if (typeof portfolioData.evidenceEntries === 'string') {
+      try {
+        // Make.com sometimes sends as comma-separated JSON objects without array brackets
+        let evidenceStr = portfolioData.evidenceEntries.trim();
+        if (!evidenceStr.startsWith('[')) {
+          evidenceStr = '[' + evidenceStr + ']';
+        }
+        portfolioData.evidenceEntries = JSON.parse(evidenceStr);
+        console.log('Parsed evidenceEntries count:', portfolioData.evidenceEntries.length);
+      } catch (e) {
+        console.log('Could not parse evidenceEntries:', e.message);
+        portfolioData.evidenceEntries = [];
+      }
+    }
     
-    console.log('Evidence count:', evidenceList.length);
-    console.log('Outcomes count:', outcomesList.length);
+    // Ensure evidenceEntries is an array
+    if (!Array.isArray(portfolioData.evidenceEntries)) {
+      portfolioData.evidenceEntries = [];
+    }
     
-    console.log('Generating portfolio for:', {
-      childName: portfolioData.childName,
-      yearLevel: portfolioData.yearLevel,
-      reportingPeriod: portfolioData.reportingPeriod,
-      parentName: portfolioData.parentName,
-      state: portfolioData.state,
-      curriculum: portfolioData.curriculum
-    });
+    // === FIX 5: Parse curriculumOutcomes if it's a string ===
+    if (typeof portfolioData.curriculumOutcomes === 'string') {
+      try {
+        let outcomesStr = portfolioData.curriculumOutcomes.trim();
+        if (!outcomesStr.startsWith('[')) {
+          outcomesStr = '[' + outcomesStr + ']';
+        }
+        portfolioData.curriculumOutcomes = JSON.parse(outcomesStr);
+        console.log('Parsed curriculumOutcomes count:', portfolioData.curriculumOutcomes.length);
+      } catch (e) {
+        console.log('Could not parse curriculumOutcomes:', e.message);
+        portfolioData.curriculumOutcomes = [];
+      }
+    }
+    
+    // Ensure curriculumOutcomes is an array
+    if (!Array.isArray(portfolioData.curriculumOutcomes)) {
+      portfolioData.curriculumOutcomes = [];
+    }
+    
+    // === FIX 6: Build evidenceByArea from evidenceEntries ===
+    // Group evidence by learning area for the document sections
+    if (portfolioData.evidenceEntries.length > 0 && 
+        (!portfolioData.evidenceByArea || Object.keys(portfolioData.evidenceByArea).length === 0)) {
+      
+      console.log('Building evidenceByArea from evidenceEntries...');
+      portfolioData.evidenceByArea = {};
+      
+      portfolioData.evidenceEntries.forEach(entry => {
+        // Get learning areas - could be array or string
+        let areas = entry['Learning Areas'] || entry.learningAreas || [];
+        if (typeof areas === 'string') {
+          areas = areas.split(',').map(a => a.trim().replace(/"/g, ''));
+        }
+        
+        areas.forEach(area => {
+          // Normalise area name
+          const normalizedArea = normalizeAreaName(area);
+          
+          if (!portfolioData.evidenceByArea[normalizedArea]) {
+            portfolioData.evidenceByArea[normalizedArea] = [];
+          }
+          
+          // Format the evidence entry
+          portfolioData.evidenceByArea[normalizedArea].push({
+            title: entry.Title || entry.title || 'Untitled',
+            date: formatDate(entry.Date || entry.date),
+            description: entry['What Happened?'] || entry.whatHappened || entry.description || '',
+            engagement: entry['Child Engagement'] || entry.childEngagement || entry.engagement || '',
+            matchedOutcomes: entry['Matched Outcomes 3'] || entry.matchedOutcomes || []
+          });
+        });
+      });
+      
+      console.log('Built evidenceByArea with areas:', Object.keys(portfolioData.evidenceByArea));
+    }
+    
+    // === FIX 7: Build learningAreaOverviews from curriculumOutcomes ===
+    if (portfolioData.curriculumOutcomes.length > 0 &&
+        (!portfolioData.learningAreaOverviews || Object.keys(portfolioData.learningAreaOverviews).length === 0)) {
+      
+      console.log('Building learningAreaOverviews from curriculumOutcomes...');
+      portfolioData.learningAreaOverviews = {};
+      
+      // Group outcomes by learning area
+      const outcomesByArea = {};
+      portfolioData.curriculumOutcomes.forEach(outcome => {
+        const area = normalizeAreaName(outcome['Learning Area'] || outcome.learningArea || 'Other');
+        if (!outcomesByArea[area]) {
+          outcomesByArea[area] = [];
+        }
+        outcomesByArea[area].push(outcome);
+      });
+      
+      // Create overview for each area
+      Object.entries(outcomesByArea).forEach(([area, outcomes]) => {
+        const evidenceForArea = portfolioData.evidenceByArea[area] || [];
+        const hasEvidence = evidenceForArea.length > 0;
+        
+        // Build stage statement from outcomes
+        const outcomeDescriptions = outcomes
+          .slice(0, 5) // Take first 5 for the overview
+          .map(o => o['Outcome Description'] || o.outcomeDescription || '')
+          .filter(d => d.length > 0)
+          .join('; ');
+        
+        portfolioData.learningAreaOverviews[area] = {
+          stageStatement: `In ${area}, Stage 2 students work towards outcomes including: ${outcomeDescriptions}`,
+          progressSummary: hasEvidence 
+            ? `${evidenceForArea.length} learning evidence entries documented for this area.`
+            : '',
+          outcomes: outcomes.map(o => ({
+            code: o['Outcome Title'] || o.outcomeTitle || o.code || '',
+            description: o['Outcome Description'] || o.outcomeDescription || o.description || ''
+          }))
+        };
+      });
+      
+      console.log('Built learningAreaOverviews for areas:', Object.keys(portfolioData.learningAreaOverviews));
+    }
+    
+    // Validate required fields
+    if (!portfolioData.childName || !portfolioData.yearLevel) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Missing required fields: childName and yearLevel are required' 
+      });
+    }
+    
+    console.log('Generating portfolio for:', portfolioData.childName);
+    console.log('Evidence entries:', portfolioData.evidenceEntries?.length || 0);
+    console.log('Curriculum outcomes:', portfolioData.curriculumOutcomes?.length || 0);
+    console.log('Evidence by area:', Object.keys(portfolioData.evidenceByArea || {}));
+    console.log('Learning area overviews:', Object.keys(portfolioData.learningAreaOverviews || {}));
     
     // Generate the portfolio document
     const doc = generatePortfolio(portfolioData);
@@ -142,31 +214,80 @@ module.exports = async (req, res) => {
     const safePeriod = (portfolioData.reportingPeriod || 'Portfolio').replace(/[^a-zA-Z0-9]/g, '-').substring(0, 30);
     const filename = `${safeName}-Portfolio-${safePeriod}.docx`;
     
-    console.log('Uploading file to Vercel Blob:', filename);
-    
-    // Upload to Vercel Blob storage
+    // Upload to Vercel Blob
     const blob = await put(`portfolios/${filename}`, buffer, {
       access: 'public',
       contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     });
     
-    console.log('File uploaded successfully, URL:', blob.url);
+    console.log('File uploaded to Vercel Blob:', blob.url);
     
-    // Return the public URL
+    // Return success with URL
     return res.status(200).json({
       success: true,
       filename: filename,
       url: blob.url,
       fileSize: buffer.length
     });
-    
+
   } catch (error) {
-    console.error('=== ERROR ===');
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('Error generating portfolio:', error);
     return res.status(500).json({ 
       success: false, 
-      error: error.message
+      error: error.message,
+      stack: error.stack
     });
   }
 };
+
+// Helper function to normalise learning area names
+function normalizeAreaName(area) {
+  if (!area) return 'Other';
+  
+  const areaStr = String(area).trim();
+  
+  // Map various names to standard names
+  const mappings = {
+    'english': 'English',
+    'mathematics': 'Mathematics',
+    'maths': 'Mathematics',
+    'math': 'Mathematics',
+    'science & technology': 'Science & Technology',
+    'science and technology': 'Science & Technology',
+    'science': 'Science & Technology',
+    'hsie': 'HSIE',
+    'hsie (history, geography etc)': 'HSIE',
+    'history': 'HSIE',
+    'geography': 'HSIE',
+    'pdhpe': 'PDHPE',
+    'pdhpe (health, physical education)': 'PDHPE',
+    'health': 'PDHPE',
+    'pe': 'PDHPE',
+    'creative arts': 'Creative Arts',
+    'art': 'Creative Arts',
+    'music': 'Creative Arts',
+    'drama': 'Creative Arts',
+    'dance': 'Creative Arts'
+  };
+  
+  const lowerArea = areaStr.toLowerCase();
+  return mappings[lowerArea] || areaStr;
+}
+
+// Helper function to format dates
+function formatDate(dateInput) {
+  if (!dateInput) return 'Date not specified';
+  
+  try {
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return String(dateInput);
+    
+    return date.toLocaleDateString('en-AU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+  } catch (e) {
+    return String(dateInput);
+  }
+}
