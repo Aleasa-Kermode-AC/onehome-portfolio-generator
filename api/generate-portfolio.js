@@ -79,42 +79,88 @@ Write only the summary paragraph, no headings or labels.`;
 }
 
 /**
- * Enhance parent assessment with AI based on evidence
+ * Enhance parent assessment with AI based on evidence - domain specific
  */
 async function enhanceParentAssessment(domain, parentInput, childName, allEvidence) {
   if (!parentInput || parentInput.trim() === '') {
     return parentInput;
   }
   
-  // Get relevant evidence snippets
-  const evidenceSnippets = [];
+  // Get evidence relevant to this domain
+  const domainKeywords = {
+    'Cognitive Development': ['thinking', 'learning', 'question', 'understand', 'problem', 'reading', 'writing', 'calculating', 'analysing'],
+    'Social Development': ['friend', 'peer', 'social', 'people', 'interact', 'play', 'share', 'communicate', 'relationship'],
+    'Emotional Development': ['feeling', 'emotion', 'confidence', 'anxiety', 'self', 'regulate', 'cope', 'express'],
+    'Physical Development': ['swim', 'run', 'motor', 'fitness', 'physical', 'movement', 'sport', 'exercise', 'coordination']
+  };
+  
+  const keywords = domainKeywords[domain] || [];
+  
+  // Find relevant evidence snippets for this domain
+  const relevantSnippets = [];
   Object.values(allEvidence).forEach(evidenceList => {
     if (Array.isArray(evidenceList)) {
       evidenceList.forEach(e => {
-        evidenceSnippets.push(`${e.title}: ${e.description}`);
+        const desc = (e.description || '').toLowerCase();
+        const isRelevant = keywords.some(kw => desc.includes(kw));
+        if (isRelevant) {
+          relevantSnippets.push(`${e.title}: ${e.description}`);
+        }
       });
     }
   });
   
-  const evidenceContext = evidenceSnippets.slice(0, 5).join('\n');
+  // Limit to 3 most relevant snippets
+  const evidenceContext = relevantSnippets.slice(0, 3).join('\n');
   
   const prompt = `A parent wrote this brief ${domain.toLowerCase()} assessment for their child ${childName}:
 
 "${parentInput}"
 
-Based on this parent input and the following learning evidence:
-${evidenceContext}
+${evidenceContext ? `Relevant learning evidence for ${domain.toLowerCase()}:\n${evidenceContext}` : ''}
 
-Expand this into a professional 3-4 sentence assessment that:
-- Keeps the parent's voice and observations
-- Adds specific examples from the evidence where relevant
+Expand this into a professional 2-3 sentence assessment that:
+- Stays focused ONLY on ${domain.toLowerCase()} (do not mention unrelated learning areas)
+- Keeps the parent's voice and observations as the foundation
+- Only adds evidence examples if they directly relate to ${domain.toLowerCase()}
 - Uses warm, strengths-based educational language
-- Is suitable for a formal home education portfolio
+- Does NOT use asterisks or markdown formatting around any words
+- Is suitable for a formal NSW home education portfolio
 
 Write only the enhanced assessment paragraph, no headings or labels.`;
 
-  const enhanced = await callOpenAI(prompt, 250);
-  return enhanced || parentInput; // Fall back to original if AI fails
+  const enhanced = await callOpenAI(prompt, 200);
+  return enhanced || parentInput;
+}
+
+/**
+ * Enhance future plans overview with AI
+ */
+async function enhanceFuturePlans(overview, goals, childName) {
+  if (!overview || overview.trim() === '') {
+    return { enhancedOverview: null, enhancedGoals: null };
+  }
+  
+  const overviewPrompt = `A parent wrote this brief future learning plans overview for their child ${childName}:
+
+"${overview}"
+
+${goals ? `Their learning goals are: "${goals}"` : ''}
+
+Expand this into a professional 2-3 sentence overview that:
+- Maintains the parent's positive sentiment
+- Adds educational context about child-led learning approaches
+- Uses warm, strengths-based language suitable for NSW home education
+- Does NOT use asterisks or markdown formatting
+
+Write only the enhanced overview paragraph.`;
+
+  const enhancedOverview = await callOpenAI(overviewPrompt, 150);
+  
+  return { 
+    enhancedOverview: enhancedOverview || overview,
+    enhancedGoals: null // Goals stay as bullet points from parent
+  };
 }
 
 module.exports = async (req, res) => {
@@ -423,6 +469,24 @@ module.exports = async (req, res) => {
       }
       
       portfolioData.enhancedProgressAssessment = enhancedAssessment;
+      
+      // 3. Enhance future plans overview
+      const parsedFuturePlans = typeof portfolioData.futurePlans === 'string' 
+        ? (() => { try { return JSON.parse(portfolioData.futurePlans); } catch(e) { return { overview: portfolioData.futurePlans }; } })()
+        : (portfolioData.futurePlans || {});
+      
+      if (parsedFuturePlans.overview) {
+        console.log('Enhancing future plans overview...');
+        const { enhancedOverview } = await enhanceFuturePlans(
+          parsedFuturePlans.overview,
+          parsedFuturePlans.goals,
+          portfolioData.childName
+        );
+        if (enhancedOverview) {
+          portfolioData.enhancedFuturePlansOverview = enhancedOverview;
+        }
+      }
+      
       console.log('AI enhancements complete');
     } else {
       console.log('OpenAI API key not configured, skipping AI enhancements');
