@@ -22,7 +22,9 @@ function generatePortfolio(portfolioData) {
     progressAssessment = {},
     futurePlans = {},
     curriculumOutcomes = [],
-    evidenceEntries = []
+    evidenceEntries = [],
+    aiProgressSummaries = {},           // AI-generated progress summaries per area
+    enhancedProgressAssessment = {}     // AI-enhanced parent assessments
   } = portfolioData;
   
   // Use parentName or parentname (handle case sensitivity)
@@ -194,7 +196,8 @@ function generatePortfolio(portfolioData) {
     curriculumOutcomes,
     yearLevel, 
     curriculumTermCap,
-    childName
+    childName,
+    aiProgressSummaries  // Pass AI summaries
   );
   children.push(...learningAreaSections);
 
@@ -216,6 +219,12 @@ function generatePortfolio(portfolioData) {
   children.push(...evidenceSections);
 
   // === SECTION 4: PARENT ASSESSMENT OF PROGRESS ===
+  // Use enhanced assessments if available, fall back to original
+  const finalCognitive = enhancedProgressAssessment.cognitive || parsedProgressAssessment.cognitive || "No assessment provided.";
+  const finalSocial = enhancedProgressAssessment.social || parsedProgressAssessment.social || "No assessment provided.";
+  const finalEmotional = enhancedProgressAssessment.emotional || parsedProgressAssessment.emotional || "No assessment provided.";
+  const finalPhysical = enhancedProgressAssessment.physical || parsedProgressAssessment.physical || "No assessment provided.";
+  
   children.push(
     new Paragraph({ children: [new PageBreak()] }),
     new Paragraph({
@@ -228,7 +237,7 @@ function generatePortfolio(portfolioData) {
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun(parsedProgressAssessment.cognitive || "No assessment provided.")]
+      children: [new TextRun(finalCognitive)]
     }),
     new Paragraph({
       heading: HeadingLevel.HEADING_2,
@@ -236,7 +245,7 @@ function generatePortfolio(portfolioData) {
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun(parsedProgressAssessment.social || "No assessment provided.")]
+      children: [new TextRun(finalSocial)]
     }),
     new Paragraph({
       heading: HeadingLevel.HEADING_2,
@@ -244,7 +253,7 @@ function generatePortfolio(portfolioData) {
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun(parsedProgressAssessment.emotional || "No assessment provided.")]
+      children: [new TextRun(finalEmotional)]
     }),
     new Paragraph({
       heading: HeadingLevel.HEADING_2,
@@ -252,7 +261,7 @@ function generatePortfolio(portfolioData) {
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun(parsedProgressAssessment.physical || "No assessment provided.")]
+      children: [new TextRun(finalPhysical)]
     })
   );
 
@@ -497,7 +506,7 @@ function generatePortfolio(portfolioData) {
 /**
  * Generate learning area overview sections
  */
-function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, curriculumOutcomes, yearLevel, curriculumTermCap, childName) {
+function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, curriculumOutcomes, yearLevel, curriculumTermCap, childName, aiProgressSummaries = {}) {
   const sections = [];
   
   // Ensure evidenceByArea is an object
@@ -546,6 +555,9 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
     const areaOutcomes = (curriculumOutcomes || []).filter(o => 
       normalizeAreaName(o['Learning Area'] || o.learningArea) === area
     );
+    
+    // Get AI summary if available
+    const aiSummary = aiProgressSummaries[area];
     
     sections.push(
       new Paragraph({
@@ -600,13 +612,25 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
       );
     }
     
-    // Add progress summary
-    if (evidence.length > 0) {
+    // Add progress summary - use AI summary if available, otherwise show count
+    sections.push(
+      new Paragraph({
+        spacing: { before: 60, after: 60 },
+        children: [new TextRun({ text: "Progress Summary:", bold: true })]
+      })
+    );
+    
+    if (aiSummary) {
+      // Use AI-generated summary
       sections.push(
         new Paragraph({
-          spacing: { before: 60, after: 60 },
-          children: [new TextRun({ text: "Progress Summary:", bold: true })]
-        }),
+          spacing: { after: 120 },
+          children: [new TextRun(aiSummary)]
+        })
+      );
+    } else if (evidence.length > 0) {
+      // Fall back to count-based summary
+      sections.push(
         new Paragraph({
           spacing: { after: 120 },
           children: [new TextRun(`${evidence.length} learning evidence ${evidence.length === 1 ? 'entry' : 'entries'} documented for this area during the reporting period.`)]
@@ -614,10 +638,6 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
       );
     } else {
       sections.push(
-        new Paragraph({
-          spacing: { before: 60, after: 60 },
-          children: [new TextRun({ text: "Evidence Status:", bold: true })]
-        }),
         new Paragraph({
           spacing: { after: 120 },
           children: [new TextRun({ 
