@@ -2,6 +2,121 @@ const { generatePortfolio } = require('../generate-portfolio');
 const { Packer } = require('docx');
 const { put } = require('@vercel/blob');
 
+// OpenAI API configuration
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+/**
+ * Call OpenAI API to generate text
+ */
+async function callOpenAI(prompt, maxTokens = 300) {
+  if (!OPENAI_API_KEY) {
+    console.log('OpenAI API key not configured, skipping AI enhancement');
+    return null;
+  }
+  
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an experienced Australian home education assessor who writes warm, strengths-based, professional summaries for neurodivergent homeschooled children. Use Australian English spelling. Be concise but thorough. Focus on growth, engagement, and demonstrated learning.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: maxTokens,
+        temperature: 0.7
+      })
+    });
+    
+    if (!response.ok) {
+      console.error('OpenAI API error:', response.status, await response.text());
+      return null;
+    }
+    
+    const data = await response.json();
+    return data.choices[0]?.message?.content?.trim() || null;
+  } catch (error) {
+    console.error('OpenAI API call failed:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Generate AI progress summary for a learning area
+ */
+async function generateProgressSummary(area, evidenceList, childName) {
+  if (!evidenceList || evidenceList.length === 0) {
+    return null;
+  }
+  
+  const evidenceSummary = evidenceList.map(e => 
+    `- "${e.title}": ${e.description} (Engagement: ${e.engagement})`
+  ).join('\n');
+  
+  const prompt = `Write a 2-3 sentence progress summary for ${childName}'s learning in ${area} based on this evidence:
+
+${evidenceSummary}
+
+The summary should:
+- Highlight key skills demonstrated
+- Note engagement levels and interests
+- Use warm, strengths-based language
+- Be suitable for a formal home education portfolio
+
+Write only the summary paragraph, no headings or labels.`;
+
+  return await callOpenAI(prompt, 200);
+}
+
+/**
+ * Enhance parent assessment with AI based on evidence
+ */
+async function enhanceParentAssessment(domain, parentInput, childName, allEvidence) {
+  if (!parentInput || parentInput.trim() === '') {
+    return parentInput;
+  }
+  
+  // Get relevant evidence snippets
+  const evidenceSnippets = [];
+  Object.values(allEvidence).forEach(evidenceList => {
+    if (Array.isArray(evidenceList)) {
+      evidenceList.forEach(e => {
+        evidenceSnippets.push(`${e.title}: ${e.description}`);
+      });
+    }
+  });
+  
+  const evidenceContext = evidenceSnippets.slice(0, 5).join('\n');
+  
+  const prompt = `A parent wrote this brief ${domain.toLowerCase()} assessment for their child ${childName}:
+
+"${parentInput}"
+
+Based on this parent input and the following learning evidence:
+${evidenceContext}
+
+Expand this into a professional 3-4 sentence assessment that:
+- Keeps the parent's voice and observations
+- Adds specific examples from the evidence where relevant
+- Uses warm, strengths-based educational language
+- Is suitable for a formal home education portfolio
+
+Write only the enhanced assessment paragraph, no headings or labels.`;
+
+  const enhanced = await callOpenAI(prompt, 250);
+  return enhanced || parentInput; // Fall back to original if AI fails
+}
+
 module.exports = async (req, res) => {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -241,6 +356,77 @@ module.exports = async (req, res) => {
     console.log('Curriculum outcomes:', portfolioData.curriculumOutcomes?.length || 0);
     console.log('Evidence by area:', Object.keys(portfolioData.evidenceByArea || {}));
     console.log('Learning area overviews:', Object.keys(portfolioData.learningAreaOverviews || {}));
+    
+    // === AI ENHANCEMENTS ===
+    if (OPENAI_API_KEY) {
+      console.log('Starting AI enhancements...');
+      
+      // 1. Generate AI progress summaries for each learning area
+      const aiProgressSummaries = {};
+      for (const [area, evidenceList] of Object.entries(portfolioData.evidenceByArea || {})) {
+        if (Array.isArray(evidenceList) && evidenceList.length > 0) {
+          console.log(`Generating AI summary for ${area}...`);
+          const summary = await generateProgressSummary(area, evidenceList, portfolioData.childName);
+          if (summary) {
+            aiProgressSummaries[area] = summary;
+            console.log(`AI summary generated for ${area}`);
+          }
+        }
+      }
+      portfolioData.aiProgressSummaries = aiProgressSummaries;
+      
+      // 2. Enhance parent assessments
+      const parsedAssessment = typeof portfolioData.progressAssessment === 'string' 
+        ? JSON.parse(portfolioData.progressAssessment) 
+        : (portfolioData.progressAssessment || {});
+      
+      const enhancedAssessment = {};
+      
+      if (parsedAssessment.cognitive) {
+        console.log('Enhancing cognitive assessment...');
+        enhancedAssessment.cognitive = await enhanceParentAssessment(
+          'Cognitive Development', 
+          parsedAssessment.cognitive, 
+          portfolioData.childName,
+          portfolioData.evidenceByArea
+        );
+      }
+      
+      if (parsedAssessment.social) {
+        console.log('Enhancing social assessment...');
+        enhancedAssessment.social = await enhanceParentAssessment(
+          'Social Development', 
+          parsedAssessment.social, 
+          portfolioData.childName,
+          portfolioData.evidenceByArea
+        );
+      }
+      
+      if (parsedAssessment.emotional) {
+        console.log('Enhancing emotional assessment...');
+        enhancedAssessment.emotional = await enhanceParentAssessment(
+          'Emotional Development', 
+          parsedAssessment.emotional, 
+          portfolioData.childName,
+          portfolioData.evidenceByArea
+        );
+      }
+      
+      if (parsedAssessment.physical) {
+        console.log('Enhancing physical assessment...');
+        enhancedAssessment.physical = await enhanceParentAssessment(
+          'Physical Development', 
+          parsedAssessment.physical, 
+          portfolioData.childName,
+          portfolioData.evidenceByArea
+        );
+      }
+      
+      portfolioData.enhancedProgressAssessment = enhancedAssessment;
+      console.log('AI enhancements complete');
+    } else {
+      console.log('OpenAI API key not configured, skipping AI enhancements');
+    }
     
     // Generate the portfolio document
     const doc = generatePortfolio(portfolioData);
