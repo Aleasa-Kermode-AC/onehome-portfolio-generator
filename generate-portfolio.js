@@ -385,6 +385,9 @@ function generatePortfolio(portfolioData) {
   }
 
   // === SECTION 6: RESOURCES ===
+  // Extract resources from evidence descriptions
+  const extractedResources = extractResourcesFromEvidence(evidenceByArea);
+  
   children.push(
     new Paragraph({ children: [new PageBreak()] }),
     new Paragraph({
@@ -398,11 +401,28 @@ function generatePortfolio(portfolioData) {
     new Paragraph({
       spacing: { after: 120 },
       children: [new TextRun("The following resources supported learning across curriculum areas during this reporting period:")]
-    }),
-    new Paragraph({
-      spacing: { after: 120 },
-      children: [new TextRun({ text: "Resources will be documented as the learning program develops.", italics: true })]
-    }),
+    })
+  );
+  
+  if (extractedResources.length > 0) {
+    extractedResources.forEach(resource => {
+      children.push(
+        new Paragraph({
+          numbering: { reference: "bullet-list", level: 0 },
+          children: [new TextRun(resource)]
+        })
+      );
+    });
+  } else {
+    children.push(
+      new Paragraph({
+        spacing: { after: 120 },
+        children: [new TextRun({ text: "Resources will be documented as the learning program develops.", italics: true })]
+      })
+    );
+  }
+  
+  children.push(
     new Paragraph({
       heading: HeadingLevel.HEADING_2,
       children: [new TextRun("6.2 Planned Resources for Next Learning Period")]
@@ -410,12 +430,29 @@ function generatePortfolio(portfolioData) {
     new Paragraph({
       spacing: { after: 120 },
       children: [new TextRun("We will continue using many of the resources that have proven effective, supplemented with additional materials as learning needs develop.")]
-    }),
-    new Paragraph({
-      spacing: { after: 120 },
-      children: [new TextRun({ text: "Resources will be documented as the learning program develops.", italics: true })]
     })
   );
+  
+  // Add planned resources if provided
+  const plannedResourcesText = parsedFuturePlans.plannedResources || '';
+  if (plannedResourcesText && plannedResourcesText.trim() !== '') {
+    const plannedList = plannedResourcesText.split(/[,\n]+/).filter(r => r.trim());
+    plannedList.forEach(resource => {
+      children.push(
+        new Paragraph({
+          numbering: { reference: "bullet-list", level: 0 },
+          children: [new TextRun(resource.trim())]
+        })
+      );
+    });
+  } else {
+    children.push(
+      new Paragraph({
+        spacing: { after: 120 },
+        children: [new TextRun({ text: "Planned resources will be identified based on emerging learning interests and needs.", italics: true })]
+      })
+    );
+  }
 
   // Create the document
   const doc = new Document({
@@ -530,9 +567,15 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
         })
       );
     } else if (areaOutcomes.length > 0) {
+      // Show up to 6 outcomes with full descriptions
       const outcomeDescriptions = areaOutcomes
-        .slice(0, 3)
-        .map(o => o['Outcome Description'] || o.outcomeDescription || '')
+        .slice(0, 6)
+        .map(o => {
+          const desc = o['Outcome Description'] || o.outcomeDescription || '';
+          const code = o['Outcome Title'] || o.outcomeTitle || '';
+          // Return full description, not truncated
+          return desc.trim();
+        })
         .filter(d => d.length > 0)
         .join('; ');
       
@@ -540,7 +583,7 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
         new Paragraph({
           spacing: { after: 60 },
           children: [new TextRun({ 
-            text: `In ${area}, ${yearLevel} students work towards outcomes including: ${outcomeDescriptions}`,
+            text: `In ${area}, ${yearLevel} students work towards outcomes including: ${outcomeDescriptions}.`,
             italics: true 
           })]
         })
@@ -746,6 +789,90 @@ function normalizeAreaName(area) {
   
   const lowerArea = areaStr.toLowerCase();
   return mappings[lowerArea] || areaStr;
+}
+
+/**
+ * Extract resources mentioned in evidence descriptions
+ */
+function extractResourcesFromEvidence(evidenceByArea) {
+  const resources = new Set();
+  
+  // Common resource patterns to look for
+  const resourcePatterns = [
+    // Apps and software
+    /\bapp[s]?\s+['"]?([^'".,]+)['"]?/gi,
+    /\busing\s+(?:the\s+)?(?:app\s+)?['"]?([A-Z][a-zA-Z\s]+)['"]?/gi,
+    // Games
+    /\b(?:played|playing)\s+(?:a\s+)?(?:game\s+)?(?:called\s+)?['"]?([A-Z][a-zA-Z\s]+)['"]?/gi,
+    /\bMinecraft\b/gi,
+    /\bRoblox\b/gi,
+    /\bLEGO\b/gi,
+    /\bLego\b/gi,
+    // Media
+    /\b(?:watched|watching)\s+(?:the\s+)?(?:movie\s+|film\s+|show\s+)?['"]?([A-Z][a-zA-Z\s]+)['"]?/gi,
+    /\bYouTube\b/gi,
+    // Platforms and tools
+    /\bFlight\s+Simulator\b/gi,
+    /\bGoogle\b/gi,
+    // Physical resources
+    /\bgeodes?\b/gi,
+    /\bpool\b/gi,
+    /\bswimming\s+pool\b/gi,
+    /\blibrary\b/gi,
+    // Educational
+    /\bpsychologist\b/gi,
+  ];
+  
+  // Known resources to extract (case-insensitive matching, proper case output)
+  const knownResources = {
+    'minecraft': 'Minecraft (digital game)',
+    'roblox': 'Roblox (digital game)',
+    'lego': 'LEGO (construction toys)',
+    'youtube': 'YouTube (video platform)',
+    'flight simulator': 'Flight Simulator app',
+    'flightradar': 'Flight tracking app',
+    'pool': 'Local swimming pool',
+    'swimming pool': 'Local swimming pool',
+    'geode': 'Geodes (geological specimens)',
+    'geodes': 'Geodes (geological specimens)',
+    'psychologist': 'Child psychologist sessions',
+    'the lorax': 'The Lorax (film/book)',
+  };
+  
+  if (!evidenceByArea || typeof evidenceByArea !== 'object') {
+    return [];
+  }
+  
+  // Go through all evidence
+  Object.values(evidenceByArea).forEach(evidenceList => {
+    if (!Array.isArray(evidenceList)) return;
+    
+    evidenceList.forEach(evidence => {
+      const description = (evidence.description || '').toLowerCase();
+      const title = (evidence.title || '').toLowerCase();
+      const combined = description + ' ' + title;
+      
+      // Check for known resources
+      Object.entries(knownResources).forEach(([pattern, resourceName]) => {
+        if (combined.includes(pattern.toLowerCase())) {
+          resources.add(resourceName);
+        }
+      });
+      
+      // Extract apps mentioned with quotes
+      const appMatches = combined.match(/app\s+['"]([^'"]+)['"]/gi);
+      if (appMatches) {
+        appMatches.forEach(match => {
+          const appName = match.replace(/app\s+['"]?/i, '').replace(/['"]?$/, '');
+          if (appName.length > 2) {
+            resources.add(`${appName} (app)`);
+          }
+        });
+      }
+    });
+  });
+  
+  return Array.from(resources).sort();
 }
 
 module.exports = { generatePortfolio };
