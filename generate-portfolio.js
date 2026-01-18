@@ -331,8 +331,18 @@ function generatePortfolio(portfolioData) {
   
   const futureStrategies = parsedFuturePlans.strategies || '';
   if (futureStrategies && futureStrategies.trim() !== '') {
-    // Split by commas or newlines
-    const strategiesList = futureStrategies.split(/[,\n\r]+/).filter(s => s.trim());
+    // Split only by newlines or by ", " followed by a capital letter (indicating a new strategy)
+    // This preserves phrases like "Allow for breaks, movement, and regulation needs"
+    let strategiesList = [];
+    
+    // First try splitting by newlines
+    if (futureStrategies.includes('\n')) {
+      strategiesList = futureStrategies.split(/[\n\r]+/).filter(s => s.trim());
+    } else {
+      // Split by comma followed by space and capital letter (new sentence/strategy)
+      strategiesList = futureStrategies.split(/,\s+(?=[A-Z])/).filter(s => s.trim());
+    }
+    
     if (strategiesList.length > 1) {
       strategiesList.forEach(strategy => {
         children.push(
