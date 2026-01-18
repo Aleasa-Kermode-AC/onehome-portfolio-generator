@@ -24,7 +24,8 @@ function generatePortfolio(portfolioData) {
     curriculumOutcomes = [],
     evidenceEntries = [],
     aiProgressSummaries = {},           // AI-generated progress summaries per area
-    enhancedProgressAssessment = {}     // AI-enhanced parent assessments
+    enhancedProgressAssessment = {},    // AI-enhanced parent assessments
+    enhancedFuturePlansOverview = null  // AI-enhanced future plans overview
   } = portfolioData;
   
   // Use parentName or parentname (handle case sensitivity)
@@ -210,7 +211,7 @@ function generatePortfolio(portfolioData) {
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun("The following sections present specific evidence of learning across all curriculum areas, with each entry linked to curriculum outcomes.")]
+      children: [new TextRun("The following sections present specific evidence of learning across all syllabus areas, with each entry linked to syllabus outcomes.")]
     })
   );
   
@@ -274,13 +275,13 @@ function generatePortfolio(portfolioData) {
     })
   );
   
-  // Overview
-  const futureOverview = parsedFuturePlans.overview || '';
-  if (futureOverview && futureOverview.trim() !== '') {
+  // Overview - use AI enhanced version if available
+  const futureOverviewText = enhancedFuturePlansOverview || parsedFuturePlans.overview || '';
+  if (futureOverviewText && futureOverviewText.trim() !== '') {
     children.push(
       new Paragraph({
         spacing: { after: 120 },
-        children: [new TextRun(futureOverview)]
+        children: [new TextRun(futureOverviewText)]
       })
     );
   } else {
@@ -302,9 +303,19 @@ function generatePortfolio(portfolioData) {
   
   const futureGoals = parsedFuturePlans.goals || '';
   if (futureGoals && futureGoals.trim() !== '') {
-    // Split goals by newlines or periods and create bullet points
-    const goalsList = futureGoals.split(/[\n\r]+/).filter(g => g.trim());
-    if (goalsList.length > 1) {
+    // Split goals by newlines, or by "To " at start of sentences (common goal pattern)
+    let goalsList = [];
+    
+    if (futureGoals.includes('\n')) {
+      goalsList = futureGoals.split(/[\n\r]+/).filter(g => g.trim());
+    } else {
+      // Split by ". To" or just "To" at the start of a new goal
+      // Pattern: "To find fiction. To build skills" -> ["To find fiction", "To build skills"]
+      goalsList = futureGoals.split(/(?:\.?\s+)(?=To\s)/i).filter(g => g.trim());
+    }
+    
+    // Always use bullet points for goals
+    if (goalsList.length > 0) {
       goalsList.forEach(goal => {
         children.push(
           new Paragraph({
@@ -313,13 +324,6 @@ function generatePortfolio(portfolioData) {
           })
         );
       });
-    } else {
-      children.push(
-        new Paragraph({
-          spacing: { after: 120 },
-          children: [new TextRun(futureGoals)]
-        })
-      );
     }
   } else {
     children.push(
@@ -409,7 +413,7 @@ function generatePortfolio(portfolioData) {
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun("The following resources supported learning across curriculum areas during this reporting period:")]
+      children: [new TextRun("The following resources supported learning across syllabus areas during this reporting period:")]
     })
   );
   
@@ -720,12 +724,6 @@ function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
       // Add matched outcomes if available
       const matchedOutcomes = evidence.matchedOutcomes;
       if (matchedOutcomes && (Array.isArray(matchedOutcomes) ? matchedOutcomes.length > 0 : matchedOutcomes.toString().trim() !== '')) {
-        sections.push(
-          new Paragraph({
-            spacing: { after: 60 },
-            children: [new TextRun({ text: "Curriculum Outcomes Addressed:", bold: true })]
-          })
-        );
         
         // Handle outcomes - could be string (from rollup) or array
         let outcomesList = [];
@@ -752,20 +750,32 @@ function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
           });
         }
         
-        // Display the outcomes
-        if (outcomesList.length > 0) {
-          outcomesList.forEach(outcomeText => {
-            // Extract just the outcome code if it includes Learning Area prefix
-            // Format: "English - Stage 2 - EN2-OLC-01" -> "EN2-OLC-01"
-            // Or: "HSIE - Stage 2 - HS2-GEO-01" -> "HS2-GEO-01"
+        // Filter to NSW syllabus codes only (EN2, MA2, ST2, HS2, PH2, CA2 patterns)
+        // Skip Australian Curriculum codes (AC9...) and Victorian codes
+        const nswPattern = /^(EN|MA|ST|HS|PH|CA)\d-[A-Z]{2,6}-\d{2}$/;
+        
+        const filteredOutcomes = outcomesList
+          .map(outcomeText => {
             let displayText = outcomeText.trim();
-            
-            // Try to extract the code pattern (e.g., EN2-OLC-01, MA2-AR-01, HS2-GEO-01, ST2-DAT-01, PH2-IHW-01, CA2-MUS-01)
+            // Extract just the code
             const codeMatch = displayText.match(/([A-Z]{2,3}\d?-[A-Z]{2,6}-\d{2})/);
             if (codeMatch) {
               displayText = codeMatch[1];
             }
-            
+            return displayText;
+          })
+          .filter(code => nswPattern.test(code)); // Only NSW codes
+        
+        // Only show section if there are filtered outcomes
+        if (filteredOutcomes.length > 0) {
+          sections.push(
+            new Paragraph({
+              spacing: { after: 60 },
+              children: [new TextRun({ text: "Syllabus Outcomes Addressed:", bold: true })]
+            })
+          );
+          
+          filteredOutcomes.forEach(displayText => {
             sections.push(
               new Paragraph({
                 numbering: { reference: "bullet-list", level: 0 },
@@ -856,6 +866,27 @@ function extractResourcesFromEvidence(evidenceByArea) {
     'geodes': 'Geodes (geological specimens)',
     'psychologist': 'Child psychologist sessions',
     'the lorax': 'The Lorax (film/book)',
+    // Art supplies
+    'watercolour': 'Watercolour paints',
+    'watercolor': 'Watercolour paints',
+    'acrylic paint': 'Acrylic paints',
+    'texta': 'Textas/markers',
+    'textas': 'Textas/markers',
+    'marker': 'Textas/markers',
+    'pencil': 'Pencils',
+    'pencils': 'Pencils',
+    'crayon': 'Crayons',
+    'crayons': 'Crayons',
+    'hot glue': 'Hot glue gun',
+    'bead': 'Beads',
+    'beads': 'Beads',
+    'paint': 'Paints',
+    // Other common resources
+    'book': 'Books',
+    'library': 'Library',
+    'ipad': 'iPad/tablet',
+    'tablet': 'iPad/tablet',
+    'computer': 'Computer',
   };
   
   if (!evidenceByArea || typeof evidenceByArea !== 'object') {
