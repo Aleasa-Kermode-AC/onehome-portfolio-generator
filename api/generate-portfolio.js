@@ -52,7 +52,7 @@ async function callOpenAI(prompt, maxTokens = 300) {
 }
 
 /**
- * Generate AI progress summary for a learning area
+ * Generate AI progress summary for a learning area - strictly subject-specific
  */
 async function generateProgressSummary(area, evidenceList, childName) {
   if (!evidenceList || evidenceList.length === 0) {
@@ -63,15 +63,25 @@ async function generateProgressSummary(area, evidenceList, childName) {
     `- "${e.title}": ${e.description} (Engagement: ${e.engagement})`
   ).join('\n');
   
-  const prompt = `Write a 2-3 sentence progress summary for ${childName}'s learning in ${area} based on this evidence:
+  const prompt = `Write a 2-3 sentence progress summary for ${childName}'s learning ONLY in ${area} based on this evidence:
 
 ${evidenceSummary}
 
-The summary should:
-- Highlight key skills demonstrated
-- Note engagement levels and interests
+CRITICAL RULES:
+- ONLY describe skills and activities directly related to ${area}
+- Do NOT mention skills from other subject areas (e.g., if this is English, don't mention maths/geography/science skills)
+- Focus on ${area}-specific learning demonstrated in the evidence
 - Use warm, strengths-based language
-- Be suitable for a formal home education portfolio
+- Do NOT use asterisks or markdown formatting around titles or words
+- Be suitable for a formal NSW home education portfolio
+
+For reference:
+- English: reading, writing, speaking, listening, comprehension, vocabulary, grammar, punctuation
+- Mathematics: numbers, calculations, measurement, geometry, data, patterns
+- Science & Technology: scientific inquiry, experiments, technology, design, natural world
+- HSIE: history, geography, civics, society, environment, culture
+- PDHPE: physical activity, health, wellbeing, relationships, safety, emotions
+- Creative Arts: visual arts, music, drama, dance, creativity, artistic expression
 
 Write only the summary paragraph, no headings or labels.`;
 
@@ -332,7 +342,9 @@ module.exports = async (req, res) => {
             date: formatDate(entry.Date || entry.date),
             description: entry['What Happened?'] || entry.whatHappened || entry.description || '',
             engagement: entry['Child Engagement'] || entry.childEngagement || entry.engagement || '',
-            matchedOutcomes: outcomeCodesString
+            matchedOutcomes: outcomeCodesString,
+            // Include photo if available (Airtable attachment field)
+            photo: entry.Photo || entry.Photos || entry.photo || entry.photos || entry.Image || entry.image || null
           });
         });
       });
