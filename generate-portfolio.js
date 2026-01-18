@@ -737,8 +737,11 @@ function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
           outcomesList.forEach(outcomeText => {
             // Extract just the outcome code if it includes Learning Area prefix
             // Format: "English - Stage 2 - EN2-OLC-01" -> "EN2-OLC-01"
-            let displayText = outcomeText;
-            const codeMatch = outcomeText.match(/([A-Z]{2,3}\d?-[A-Z]{2,4}-\d{2})/);
+            // Or: "HSIE - Stage 2 - HS2-GEO-01" -> "HS2-GEO-01"
+            let displayText = outcomeText.trim();
+            
+            // Try to extract the code pattern (e.g., EN2-OLC-01, MA2-AR-01, HS2-GEO-01, ST2-DAT-01, PH2-IHW-01, CA2-MUS-01)
+            const codeMatch = displayText.match(/([A-Z]{2,3}\d?-[A-Z]{2,6}-\d{2})/);
             if (codeMatch) {
               displayText = codeMatch[1];
             }
