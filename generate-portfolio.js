@@ -180,6 +180,7 @@ function generatePortfolio(portfolioData) {
 
   // === SECTION 2: LEARNING AREAS OVERVIEW ===
   children.push(
+    new Paragraph({ children: [new PageBreak()] }),
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
       children: [new TextRun("2. Learning Areas Overview")]
@@ -207,16 +208,24 @@ function generatePortfolio(portfolioData) {
     new Paragraph({ children: [new PageBreak()] }),
     new Paragraph({
       heading: HeadingLevel.HEADING_1,
-      children: [new TextRun("3. Detailed Learning Evidence by Subject Area")]
+      children: [new TextRun("3. Detailed Learning Evidence")]
     }),
     new Paragraph({
       spacing: { after: 120 },
-      children: [new TextRun("The following sections present specific evidence of learning across all syllabus areas, with each entry linked to syllabus outcomes.")]
+      children: [new TextRun("Our learning activities integrate learning into everyday life experiences, encouraging self-directed inquiry, real-world problem-solving, and project-based activities that emerge from our child's passions.")]
+    }),
+    new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun("In our homeschool program, we use flexible learning models that ensure all key syllabus areas are covered, but not always through a traditional, linear sequence. Instead of progressing subject-by-subject in a fixed order, learning happens naturally across multiple areas at once, often integrated into real-world projects, play, or child-led inquiry. This is how we create an interdisciplinary approach to education.")]
+    }),
+    new Paragraph({
+      spacing: { after: 120 },
+      children: [new TextRun(`This approach allows ${childName} to engage deeply and meaningfully with the syllabus in ways that suit their developmental stage, interests, and learning style. It also aligns with the principles of our flexible learning model and inclusive education practices, ensuring that learning remains accessible, engaging, and personalised.`)]
     })
   );
   
-  // Generate evidence sections
-  const evidenceSections = generateEvidenceSections(evidenceByArea, curriculumOutcomes);
+  // Generate evidence sections - NO LONGER grouped by subject area
+  const evidenceSections = generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes);
   children.push(...evidenceSections);
 
   // === SECTION 4: PARENT ASSESSMENT OF PROGRESS ===
@@ -659,7 +668,169 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
 }
 
 /**
- * Generate detailed evidence sections
+ * Generate flat evidence sections without duplicating entries across subject areas
+ * Each evidence entry appears once with all its associated outcomes
+ */
+function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
+  const sections = [];
+  
+  if (!evidenceByArea || typeof evidenceByArea !== 'object' || Object.keys(evidenceByArea).length === 0) {
+    sections.push(
+      new Paragraph({
+        spacing: { after: 120 },
+        children: [new TextRun({ 
+          text: "Detailed evidence will be documented as learning activities are recorded.",
+          italics: true 
+        })]
+      })
+    );
+    return sections;
+  }
+  
+  // Collect all unique evidence entries (avoid duplicates)
+  const seenTitles = new Set();
+  const uniqueEvidence = [];
+  
+  Object.entries(evidenceByArea).forEach(([area, evidenceList]) => {
+    if (!Array.isArray(evidenceList)) {
+      if (typeof evidenceList === 'object') {
+        evidenceList = Object.values(evidenceList);
+      } else {
+        return;
+      }
+    }
+    
+    evidenceList.forEach(evidence => {
+      const title = evidence.title || 'Untitled';
+      if (!seenTitles.has(title)) {
+        seenTitles.add(title);
+        uniqueEvidence.push({
+          ...evidence,
+          primaryArea: area
+        });
+      }
+    });
+  });
+  
+  // Sort by date (most recent first)
+  uniqueEvidence.sort((a, b) => {
+    const dateA = new Date(a.date || 0);
+    const dateB = new Date(b.date || 0);
+    return dateB - dateA;
+  });
+  
+  // Generate sections for each unique evidence entry
+  uniqueEvidence.forEach((evidence, idx) => {
+    sections.push(
+      new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        children: [new TextRun(`3.${idx + 1} ${evidence.title || `Evidence ${idx + 1}`}`)]
+      }),
+      new Paragraph({
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: "Date: ", bold: true }),
+          new TextRun(evidence.date || 'Not specified')
+        ]
+      }),
+      new Paragraph({
+        spacing: { after: 60 },
+        children: [
+          new TextRun({ text: "Description: ", bold: true }),
+          new TextRun(evidence.description || 'No description provided.')
+        ]
+      })
+    );
+    
+    // Add matched outcomes if available (filtered to NSW only)
+    const matchedOutcomes = evidence.matchedOutcomes;
+    if (matchedOutcomes && (Array.isArray(matchedOutcomes) ? matchedOutcomes.length > 0 : matchedOutcomes.toString().trim() !== '')) {
+      
+      let outcomesList = [];
+      if (typeof matchedOutcomes === 'string') {
+        outcomesList = matchedOutcomes.split(',').map(o => o.trim()).filter(o => o.length > 0);
+      } else if (Array.isArray(matchedOutcomes)) {
+        matchedOutcomes.forEach(outcome => {
+          if (typeof outcome === 'string') {
+            if (outcome.startsWith('rec') && outcome.length === 17) return;
+            outcomesList.push(outcome);
+          } else if (typeof outcome === 'object') {
+            const text = `${outcome.code || outcome['Outcome Title'] || ''}: ${outcome.description || outcome['Outcome Description'] || ''}`;
+            if (text.trim() !== ':') outcomesList.push(text);
+          }
+        });
+      }
+      
+      // Filter to NSW syllabus codes only
+      const nswPattern = /^(EN|MA|ST|HS|PH|CA)\d-[A-Z]{2,6}-\d{2}$/;
+      const filteredOutcomes = outcomesList
+        .map(outcomeText => {
+          let displayText = outcomeText.trim();
+          const codeMatch = displayText.match(/([A-Z]{2,3}\d?-[A-Z]{2,6}-\d{2})/);
+          if (codeMatch) displayText = codeMatch[1];
+          return displayText;
+        })
+        .filter(code => nswPattern.test(code));
+      
+      if (filteredOutcomes.length > 0) {
+        sections.push(
+          new Paragraph({
+            spacing: { after: 60 },
+            children: [new TextRun({ text: "Syllabus Outcomes Addressed:", bold: true })]
+          })
+        );
+        
+        filteredOutcomes.forEach(displayText => {
+          sections.push(
+            new Paragraph({
+              numbering: { reference: "bullet-list", level: 0 },
+              children: [new TextRun(displayText)]
+            })
+          );
+        });
+      }
+    }
+    
+    // Add engagement level if available
+    if (evidence.engagement) {
+      sections.push(
+        new Paragraph({
+          spacing: { before: 60, after: 60 },
+          children: [
+            new TextRun({ text: "Child Engagement: ", bold: true }),
+            new TextRun(evidence.engagement)
+          ]
+        })
+      );
+    }
+    
+    // Add photo if available
+    if (evidence.photo || evidence.photoUrl || evidence.image) {
+      const photoUrl = evidence.photo || evidence.photoUrl || evidence.image;
+      sections.push(
+        new Paragraph({
+          spacing: { before: 60, after: 60 },
+          children: [
+            new TextRun({ text: "Photo: ", bold: true }),
+            new TextRun({ text: "[Photo attached]", italics: true })
+          ]
+        })
+      );
+      // Note: Actual image embedding requires fetching the image and using ImageRun
+      // This would need to be implemented if photos are stored as URLs
+    }
+    
+    // Add spacing after each entry
+    sections.push(
+      new Paragraph({ spacing: { after: 120 }, children: [] })
+    );
+  });
+  
+  return sections;
+}
+
+/**
+ * Generate detailed evidence sections (legacy - grouped by subject)
  */
 function generateEvidenceSections(evidenceByArea, curriculumOutcomes) {
   const sections = [];
