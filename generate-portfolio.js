@@ -32,11 +32,27 @@ function generatePortfolio(portfolioData) {
   let parsedFuturePlans = futurePlans;
   if (typeof futurePlans === 'string') {
     try {
-      parsedFuturePlans = JSON.parse(futurePlans);
+      // Remove any escaped characters and parse
+      const cleanedString = futurePlans.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      parsedFuturePlans = JSON.parse(cleanedString);
     } catch (e) {
-      parsedFuturePlans = { overview: futurePlans };
+      // If it looks like JSON but failed to parse, try to extract values manually
+      if (futurePlans.includes('"overview"') || futurePlans.includes('"goals"')) {
+        try {
+          // Try wrapping in proper JSON if it's malformed
+          const fixed = futurePlans.replace(/^\{?\s*/, '{').replace(/\s*\}?$/, '}');
+          parsedFuturePlans = JSON.parse(fixed);
+        } catch (e2) {
+          parsedFuturePlans = { overview: futurePlans };
+        }
+      } else {
+        parsedFuturePlans = { overview: futurePlans };
+      }
     }
   }
+  
+  // Log for debugging
+  console.log('Parsed futurePlans:', parsedFuturePlans);
   
   // Parse progressAssessment if it's a string
   let parsedProgressAssessment = progressAssessment;
@@ -462,6 +478,11 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
   let sectionNum = 1;
   
   allAreas.forEach(area => {
+    // Skip numeric or empty area names (these are artifacts from bad data)
+    if (!area || area === '0' || area === '1' || /^\d+$/.test(area)) {
+      return;
+    }
+    
     // Skip non-standard areas that have no content
     const areaEvidence = evidenceByArea[area];
     const evidenceArray = Array.isArray(areaEvidence) ? areaEvidence : 
