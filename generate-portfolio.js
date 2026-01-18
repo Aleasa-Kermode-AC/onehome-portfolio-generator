@@ -5,6 +5,38 @@ const https = require('https');
 
 // This script receives data from Make.com and generates a portfolio DOCX
 
+// Helper function to ensure data is in array format
+function ensureArray(data) {
+  // If it's already an array, return it
+  if (Array.isArray(data)) {
+    return data;
+  }
+  
+  // If it's null or undefined, return empty array
+  if (!data) {
+    return [];
+  }
+  
+  // If it's an object with an 'array' property
+  if (typeof data === 'object' && data.array) {
+    return Array.isArray(data.array) ? data.array : [];
+  }
+  
+  // If it's an object, try to convert it to an array
+  if (typeof data === 'object') {
+    // Filter out empty values and metadata
+    const values = Object.values(data).filter(item => 
+      item && 
+      typeof item === 'object' && 
+      !Array.isArray(item)
+    );
+    return values.length > 0 ? values : [];
+  }
+  
+  // Default: return empty array
+  return [];
+}
+
 async function generateAIProgressSummary(learningArea, evidenceList, apiKey) {
   // If no evidence, return empty (will trigger "no evidence" statement)
   if (!evidenceList || evidenceList.length === 0) {
@@ -155,7 +187,7 @@ function selectDiverseEvidence(evidenceByArea, maxTotal = 30) {
   const maxPerArea = 5;
   
   Object.entries(evidenceByArea).forEach(([area, evidenceList]) => {
-    if (!evidenceList || evidenceList.length === 0) return;
+    if (!Array.isArray(evidenceList) || evidenceList.length === 0) return;
     
     // Sort by engagement level and take most engaged + spread across dates
     const sorted = evidenceList.sort((a, b) => {
@@ -175,6 +207,7 @@ function generateEvidenceStatistics(evidenceByArea, selectedEvidence) {
   const stats = {};
   
   Object.entries(evidenceByArea).forEach(([area, fullList]) => {
+    if (!Array.isArray(fullList)) return;
     const selectedList = selectedEvidence[area] || [];
     const total = fullList.length;
     const shown = selectedList.length;
@@ -196,8 +229,9 @@ function identifyUnaddressedOutcomes(allOutcomes, evidenceByArea) {
   const addressedCodes = new Set();
   
   Object.values(evidenceByArea).forEach(evidenceList => {
+    if (!Array.isArray(evidenceList)) return;
     evidenceList.forEach(evidence => {
-      if (evidence.matchedOutcomes) {
+      if (evidence && evidence.matchedOutcomes && Array.isArray(evidence.matchedOutcomes)) {
         evidence.matchedOutcomes.forEach(outcome => {
           addressedCodes.add(outcome.code);
         });
@@ -325,7 +359,12 @@ function generateEvidenceSections(evidenceByArea, allOutcomes) {
   }
   
   Object.entries(selectedEvidence).forEach(([area, evidenceList]) => {
-    if (!evidenceList || evidenceList.length === 0) return;
+    // Ensure evidenceList is an array
+    if (!Array.isArray(evidenceList)) {
+      console.log(`Warning: evidenceList for ${area} is not an array, skipping`);
+      return;
+    }
+    if (evidenceList.length === 0) return;
     
     sections.push(
       new Paragraph({
@@ -490,6 +529,22 @@ function generateEvidenceSections(evidenceByArea, allOutcomes) {
 }
 
 function generatePortfolio(portfolioData) {
+  // Ensure arrays are properly formatted (Make.com sometimes sends objects instead of arrays)
+  if (portfolioData.evidenceEntries) {
+    portfolioData.evidenceEntries = ensureArray(portfolioData.evidenceEntries);
+  }
+  if (portfolioData.curriculumOutcomes) {
+    portfolioData.curriculumOutcomes = ensureArray(portfolioData.curriculumOutcomes);
+  }
+  if (portfolioData.allOutcomes) {
+    portfolioData.allOutcomes = ensureArray(portfolioData.allOutcomes);
+  }
+  if (portfolioData.evidenceByArea) {
+    Object.keys(portfolioData.evidenceByArea).forEach(key => {
+      portfolioData.evidenceByArea[key] = ensureArray(portfolioData.evidenceByArea[key]);
+    });
+  }
+  
   const {
     childName,
     yearLevel,
@@ -497,11 +552,11 @@ function generatePortfolio(portfolioData) {
     parentName,
     state,
     curriculum,
-    learningAreaOverviews,
-    evidenceByArea,
-    progressAssessment,
-    futurePlans,
-    allOutcomes // Array of all curriculum outcomes for this stage
+    learningAreaOverviews = {},
+    evidenceByArea = {},
+    progressAssessment = {},
+    futurePlans = {},
+    allOutcomes = [] // Array of all curriculum outcomes for this stage
   } = portfolioData;
 
   const curriculumTerm = getCurriculumTerm(state);
@@ -731,7 +786,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.cognitive)]
+          children: [new TextRun(progressAssessment.cognitive || "No assessment provided.")]
         }),
 
         new Paragraph({
@@ -740,7 +795,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.social)]
+          children: [new TextRun(progressAssessment.social || "No assessment provided.")]
         }),
 
         new Paragraph({
@@ -749,7 +804,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.emotional)]
+          children: [new TextRun(progressAssessment.emotional || "No assessment provided.")]
         }),
 
         new Paragraph({
@@ -758,7 +813,7 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(progressAssessment.physical)]
+          children: [new TextRun(progressAssessment.physical || "No assessment provided.")]
         }),
 
         new Paragraph({ children: [new PageBreak()] }),
@@ -768,30 +823,30 @@ function generatePortfolio(portfolioData) {
         }),
         new Paragraph({
           spacing: { after: 120 },
-          children: [new TextRun(futurePlans.overview)]
+          children: [new TextRun(futurePlans.overview || "No future plans overview provided.")]
         }),
 
         new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun("5.1 Learning Goals")]
         }),
-        ...futurePlans.goals.map(goal => 
+        ...(Array.isArray(futurePlans.goals) ? futurePlans.goals.map(goal => 
           new Paragraph({
             numbering: { reference: "bullet-list", level: 0 },
-            children: [new TextRun(goal)]
+            children: [new TextRun(goal || "")]
           })
-        ),
+        ) : [new Paragraph({ children: [new TextRun("No learning goals specified.")] })]),
 
         new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun("5.2 Planned Strategies")]
         }),
-        ...futurePlans.strategies.map(strategy =>
+        ...(Array.isArray(futurePlans.strategies) ? futurePlans.strategies.map(strategy =>
           new Paragraph({
             numbering: { reference: "bullet-list", level: 0 },
-            children: [new TextRun(strategy)]
+            children: [new TextRun(strategy || "")]
           })
-        ),
+        ) : [new Paragraph({ children: [new TextRun("No strategies specified.")] })]),
         new Paragraph({ children: [new PageBreak()] }),
         new Paragraph({
           heading: HeadingLevel.HEADING_1,
@@ -836,11 +891,11 @@ function generateResourcesList(evidenceByArea, type, additionalResources = []) {
   };
   
   // Collect resources from evidence
-  if (type === 'used') {
+  if (type === 'used' && evidenceByArea && typeof evidenceByArea === 'object') {
     Object.values(evidenceByArea).forEach(evidenceList => {
-      if (!evidenceList) return;
+      if (!Array.isArray(evidenceList)) return;
       evidenceList.forEach(evidence => {
-        if (evidence.resources) {
+        if (evidence && evidence.resources && Array.isArray(evidence.resources)) {
           evidence.resources.forEach(resource => {
             // Categorize resource
             const category = categorizeResource(resource);
@@ -852,7 +907,7 @@ function generateResourcesList(evidenceByArea, type, additionalResources = []) {
   }
   
   // Add additional planned resources
-  if (type === 'planned' && additionalResources && additionalResources.length > 0) {
+  if (type === 'planned' && Array.isArray(additionalResources) && additionalResources.length > 0) {
     additionalResources.forEach(resource => {
       const category = categorizeResource(resource);
       resourceCategories[category].add(resource);
