@@ -48,10 +48,21 @@ module.exports = async (req, res) => {
     // === FIX 2: Parse futurePlans if it's a string ===
     if (typeof portfolioData.futurePlans === 'string') {
       try {
-        portfolioData.futurePlans = JSON.parse(portfolioData.futurePlans);
-        console.log('Parsed futurePlans:', portfolioData.futurePlans);
+        // Handle the specific format from Make.com with curly braces and newlines
+        let cleanedString = portfolioData.futurePlans
+          .replace(/\{\s+"/g, '{"')  // Fix leading whitespace after {
+          .replace(/"\s+\}/g, '"}')  // Fix trailing whitespace before }
+          .replace(/\\n/g, ' ')      // Replace escaped newlines with spaces
+          .replace(/\n/g, ' ')       // Replace actual newlines with spaces
+          .trim();
+        
+        portfolioData.futurePlans = JSON.parse(cleanedString);
+        console.log('Parsed futurePlans successfully:', Object.keys(portfolioData.futurePlans));
       } catch (e) {
-        console.log('Could not parse futurePlans as JSON, using as-is');
+        console.log('Could not parse futurePlans as JSON:', e.message);
+        console.log('Raw futurePlans:', portfolioData.futurePlans.substring(0, 200));
+        // Keep as object with raw string as overview
+        portfolioData.futurePlans = { overview: portfolioData.futurePlans };
       }
     }
     
@@ -125,6 +136,11 @@ module.exports = async (req, res) => {
         
         areas.forEach(area => {
           if (!area) return;
+          
+          // Skip numeric or invalid area names
+          if (area === '0' || area === '1' || /^\d+$/.test(String(area))) {
+            return;
+          }
           
           // Normalise area name
           const normalizedArea = normalizeAreaName(area);
