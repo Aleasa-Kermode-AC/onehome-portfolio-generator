@@ -32,6 +32,24 @@ module.exports = async (req, res) => {
     
     const portfolioData = req.body;
     
+    // Parse progressAssessment if it's a string
+    if (typeof portfolioData.progressAssessment === 'string') {
+      try {
+        portfolioData.progressAssessment = JSON.parse(portfolioData.progressAssessment);
+      } catch (e) {
+        console.log('Could not parse progressAssessment as JSON, using as-is');
+      }
+    }
+    
+    // Parse futurePlans if it's a string
+    if (typeof portfolioData.futurePlans === 'string') {
+      try {
+        portfolioData.futurePlans = JSON.parse(portfolioData.futurePlans);
+      } catch (e) {
+        console.log('Could not parse futurePlans as JSON, using as-is');
+      }
+    }
+    
     // Helper function to ensure data is in array format
     function ensureArray(data, fieldName) {
       console.log(`Parsing ${fieldName}, type:`, typeof data);
