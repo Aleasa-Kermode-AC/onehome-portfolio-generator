@@ -1,5 +1,6 @@
 const { generatePortfolio } = require('../generate-portfolio');
 const { Packer } = require('docx');
+const { put } = require('@vercel/blob');
 
 module.exports = async (req, res) => {
   // Handle CORS
@@ -123,18 +124,21 @@ module.exports = async (req, res) => {
     const safePeriod = (portfolioData.reportingPeriod || 'Portfolio').replace(/[^a-zA-Z0-9]/g, '-').substring(0, 30);
     const filename = `${safeName}-Portfolio-${safePeriod}.docx`;
     
-    console.log('Sending file with name:', filename);
+    console.log('Uploading file to Vercel Blob:', filename);
     
-    // Convert buffer to base64
-    const base64Data = buffer.toString('base64');
+    // Upload to Vercel Blob storage
+    const blob = await put(`portfolios/${filename}`, buffer, {
+      access: 'public',
+      contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    });
     
-    console.log('File converted to base64, length:', base64Data.length);
+    console.log('File uploaded successfully, URL:', blob.url);
     
-    // Return as JSON with base64-encoded file
+    // Return the public URL
     return res.status(200).json({
       success: true,
       filename: filename,
-      fileData: base64Data,
+      url: blob.url,
       fileSize: buffer.length
     });
     
