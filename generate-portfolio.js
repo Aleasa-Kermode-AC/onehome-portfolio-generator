@@ -435,9 +435,27 @@ function generatePortfolio(portfolioData) {
       })
     );
     
-    // Split by commas or newlines and create bullet points
-    const resourcesList = plannedResources.split(/[,\n]+/).map(r => r.trim()).filter(r => r.length > 0);
-    if (resourcesList.length > 1) {
+    // Split by various delimiters: commas, newlines, or common resource boundaries
+    // Also handle case where items might be separated by double spaces or capital letters starting new items
+    let resourcesList = [];
+    
+    // First try splitting by commas or newlines
+    if (plannedResources.includes(',') || plannedResources.includes('\n')) {
+      resourcesList = plannedResources.split(/[,\n]+/).map(r => r.trim()).filter(r => r.length > 0);
+    } else {
+      // Try to detect items by looking for patterns like "Word Word Word" repeated
+      // Common resource patterns: "Local library", "Online platforms", "Science kits", etc.
+      // Split on capital letters that follow lowercase letters (new item starts)
+      const items = plannedResources.split(/(?<=[a-z])\s+(?=[A-Z])/).map(r => r.trim()).filter(r => r.length > 0);
+      if (items.length > 1) {
+        resourcesList = items;
+      } else {
+        // Fall back to showing as single item
+        resourcesList = [plannedResources.trim()];
+      }
+    }
+    
+    if (resourcesList.length > 0) {
       resourcesList.forEach(resource => {
         children.push(
           new Paragraph({
@@ -446,13 +464,6 @@ function generatePortfolio(portfolioData) {
           })
         );
       });
-    } else {
-      children.push(
-        new Paragraph({
-          spacing: { after: 120 },
-          children: [new TextRun(plannedResources)]
-        })
-      );
     }
   }
 
@@ -508,12 +519,26 @@ function generatePortfolio(portfolioData) {
   // Add planned resources if provided
   const plannedResourcesText = parsedFuturePlans.plannedResources || '';
   if (plannedResourcesText && plannedResourcesText.trim() !== '') {
-    const plannedList = plannedResourcesText.split(/[,\n]+/).filter(r => r.trim());
+    // Split by various delimiters: commas, newlines, or capital letters starting new items
+    let plannedList = [];
+    
+    if (plannedResourcesText.includes(',') || plannedResourcesText.includes('\n')) {
+      plannedList = plannedResourcesText.split(/[,\n]+/).map(r => r.trim()).filter(r => r.length > 0);
+    } else {
+      // Try to detect items by capital letters that follow lowercase letters
+      const items = plannedResourcesText.split(/(?<=[a-z])\s+(?=[A-Z])/).map(r => r.trim()).filter(r => r.length > 0);
+      if (items.length > 1) {
+        plannedList = items;
+      } else {
+        plannedList = [plannedResourcesText.trim()];
+      }
+    }
+    
     plannedList.forEach(resource => {
       children.push(
         new Paragraph({
           numbering: { reference: "bullet-list", level: 0 },
-          children: [new TextRun(resource.trim())]
+          children: [new TextRun(resource)]
         })
       );
     });
