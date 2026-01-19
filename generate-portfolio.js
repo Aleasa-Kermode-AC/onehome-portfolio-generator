@@ -425,19 +425,35 @@ function generatePortfolio(portfolioData) {
     );
   }
   
-  // Planned Resources
+  // Planned Resources (Section 5.3)
   const plannedResources = parsedFuturePlans.plannedResources || '';
   if (plannedResources && plannedResources.trim() !== '') {
     children.push(
       new Paragraph({
         heading: HeadingLevel.HEADING_2,
         children: [new TextRun("5.3 Planned Resources")]
-      }),
-      new Paragraph({
-        spacing: { after: 120 },
-        children: [new TextRun(plannedResources)]
       })
     );
+    
+    // Split by commas or newlines and create bullet points
+    const resourcesList = plannedResources.split(/[,\n]+/).map(r => r.trim()).filter(r => r.length > 0);
+    if (resourcesList.length > 1) {
+      resourcesList.forEach(resource => {
+        children.push(
+          new Paragraph({
+            numbering: { reference: "bullet-list", level: 0 },
+            children: [new TextRun(resource)]
+          })
+        );
+      });
+    } else {
+      children.push(
+        new Paragraph({
+          spacing: { after: 120 },
+          children: [new TextRun(plannedResources)]
+        })
+      );
+    }
   }
 
   // === SECTION 6: RESOURCES ===
