@@ -291,11 +291,44 @@ module.exports = async (req, res) => {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  /**
+   * Sanitize string to remove control characters that break JSON
+   */
+  function sanitizeString(str) {
+    if (typeof str !== 'string') return str;
+    // Remove control characters (except newline, carriage return, tab)
+    // Then normalize whitespace
+    return str
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+      .replace(/\r\n/g, '\n')  // Normalize line endings
+      .replace(/\r/g, '\n')    // Normalize line endings
+      .replace(/\t/g, ' ')     // Replace tabs with spaces
+      .trim();
+  }
+
+  /**
+   * Recursively sanitize all strings in an object
+   */
+  function sanitizeObject(obj) {
+    if (obj === null || obj === undefined) return obj;
+    if (typeof obj === 'string') return sanitizeString(obj);
+    if (Array.isArray(obj)) return obj.map(item => sanitizeObject(item));
+    if (typeof obj === 'object') {
+      const sanitized = {};
+      for (const [key, value] of Object.entries(obj)) {
+        sanitized[key] = sanitizeObject(value);
+      }
+      return sanitized;
+    }
+    return obj;
+  }
+
   try {
     console.log('=== PORTFOLIO GENERATION REQUEST ===');
     console.log('Request received at:', new Date().toISOString());
     
-    let portfolioData = req.body;
+    // Sanitize all input data to remove control characters
+    let portfolioData = sanitizeObject(req.body);
     
     // Log raw input for debugging
     console.log('Raw parentname:', portfolioData.parentname);
