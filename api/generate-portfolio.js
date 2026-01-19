@@ -396,7 +396,7 @@ module.exports = async (req, res) => {
     if (typeof portfolioData.futurePlans === 'string') {
       try {
         // Handle the specific format from Make.com with curly braces and newlines
-        let cleanedString = portfolioData.futurePlans
+        let cleanedString = sanitizeJsonString(portfolioData.futurePlans)
           .replace(/\{\s+"/g, '{"')  // Fix leading whitespace after {
           .replace(/"\s+\}/g, '"}')  // Fix trailing whitespace before }
           .replace(/\\n/g, ' ')      // Replace escaped newlines with spaces
@@ -409,14 +409,14 @@ module.exports = async (req, res) => {
         console.log('Could not parse futurePlans as JSON:', e.message);
         console.log('Raw futurePlans:', portfolioData.futurePlans.substring(0, 200));
         // Keep as object with raw string as overview
-        portfolioData.futurePlans = { overview: portfolioData.futurePlans };
+        portfolioData.futurePlans = { overview: sanitizeString(portfolioData.futurePlans) };
       }
     }
     
     // === FIX 3: Parse progressAssessment if it's a string ===
     if (typeof portfolioData.progressAssessment === 'string') {
       try {
-        portfolioData.progressAssessment = JSON.parse(portfolioData.progressAssessment);
+        portfolioData.progressAssessment = JSON.parse(sanitizeJsonString(portfolioData.progressAssessment));
         console.log('Parsed progressAssessment:', portfolioData.progressAssessment);
       } catch (e) {
         console.log('Could not parse progressAssessment as JSON, using as-is');
@@ -427,7 +427,7 @@ module.exports = async (req, res) => {
     if (typeof portfolioData.evidenceEntries === 'string') {
       try {
         // Make.com sometimes sends as comma-separated JSON objects without array brackets
-        let evidenceStr = portfolioData.evidenceEntries.trim();
+        let evidenceStr = sanitizeJsonString(portfolioData.evidenceEntries).trim();
         if (!evidenceStr.startsWith('[')) {
           evidenceStr = '[' + evidenceStr + ']';
         }
@@ -447,7 +447,7 @@ module.exports = async (req, res) => {
     // === FIX 5: Parse curriculumOutcomes if it's a string ===
     if (typeof portfolioData.curriculumOutcomes === 'string') {
       try {
-        let outcomesStr = portfolioData.curriculumOutcomes.trim();
+        let outcomesStr = sanitizeJsonString(portfolioData.curriculumOutcomes).trim();
         if (!outcomesStr.startsWith('[')) {
           outcomesStr = '[' + outcomesStr + ']';
         }
@@ -624,7 +624,7 @@ module.exports = async (req, res) => {
       
       // 2. Enhance parent assessments
       const parsedAssessment = typeof portfolioData.progressAssessment === 'string' 
-        ? JSON.parse(portfolioData.progressAssessment) 
+        ? (() => { try { return JSON.parse(sanitizeJsonString(portfolioData.progressAssessment)); } catch(e) { return {}; } })()
         : (portfolioData.progressAssessment || {});
       
       const enhancedAssessment = {};
@@ -673,7 +673,7 @@ module.exports = async (req, res) => {
       
       // 3. Enhance future plans overview
       const parsedFuturePlans = typeof portfolioData.futurePlans === 'string' 
-        ? (() => { try { return JSON.parse(portfolioData.futurePlans); } catch(e) { return { overview: portfolioData.futurePlans }; } })()
+        ? (() => { try { return JSON.parse(sanitizeJsonString(portfolioData.futurePlans)); } catch(e) { return { overview: sanitizeString(portfolioData.futurePlans) }; } })()
         : (portfolioData.futurePlans || {});
       
       if (parsedFuturePlans.overview) {
