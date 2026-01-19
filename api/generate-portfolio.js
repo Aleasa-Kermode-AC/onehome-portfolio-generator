@@ -415,11 +415,11 @@ module.exports = async (req, res) => {
     
     // === FIX 3: Parse progressAssessment if it's a string ===
     console.log('progressAssessment type:', typeof portfolioData.progressAssessment);
-    console.log('progressAssessment raw:', JSON.stringify(portfolioData.progressAssessment)?.substring(0, 500));
+    console.log('progressAssessment raw (first 500):', JSON.stringify(portfolioData.progressAssessment)?.substring(0, 500));
     
     if (typeof portfolioData.progressAssessment === 'string' && portfolioData.progressAssessment.trim()) {
       try {
-        // Clean up the JSON string - remove extra whitespace that Make.com adds
+        // Clean up the JSON string - remove extra whitespace and handle newlines in values
         let cleanedAssessment = sanitizeJsonString(portfolioData.progressAssessment)
           .replace(/\{\s+"/g, '{"')      // Fix whitespace after {
           .replace(/"\s+\}/g, '"}')      // Fix whitespace before }
@@ -428,13 +428,36 @@ module.exports = async (req, res) => {
           .replace(/"\s+,/g, '",')       // Fix whitespace before commas
           .trim();
         
+        // Handle newlines INSIDE string values by replacing them with spaces
+        // This regex finds content between quotes and replaces newlines with spaces
+        cleanedAssessment = cleanedAssessment.replace(/"([^"]*)"/g, (match, content) => {
+          return '"' + content.replace(/\n/g, ' ').replace(/\r/g, ' ').replace(/\s+/g, ' ').trim() + '"';
+        });
+        
         console.log('Cleaned progressAssessment:', cleanedAssessment.substring(0, 300));
         portfolioData.progressAssessment = JSON.parse(cleanedAssessment);
         console.log('Parsed progressAssessment successfully');
       } catch (e) {
         console.log('Could not parse progressAssessment as JSON:', e.message);
-        // Try to extract values if it looks like a simple format
-        portfolioData.progressAssessment = {};
+        
+        // Fallback: Try to extract values manually using regex
+        try {
+          const cognitiveMatch = portfolioData.progressAssessment.match(/"cognitive"\s*:\s*"([^"]+)"/);
+          const socialMatch = portfolioData.progressAssessment.match(/"social"\s*:\s*"([^"]+)"/);
+          const emotionalMatch = portfolioData.progressAssessment.match(/"emotional"\s*:\s*"([^"]+)"/);
+          const physicalMatch = portfolioData.progressAssessment.match(/"physical"\s*:\s*"([^"]+)"/);
+          
+          portfolioData.progressAssessment = {
+            cognitive: cognitiveMatch ? cognitiveMatch[1].replace(/\n/g, ' ').trim() : null,
+            social: socialMatch ? socialMatch[1].replace(/\n/g, ' ').trim() : null,
+            emotional: emotionalMatch ? emotionalMatch[1].replace(/\n/g, ' ').trim() : null,
+            physical: physicalMatch ? physicalMatch[1].replace(/\n/g, ' ').trim() : null
+          };
+          console.log('Extracted progressAssessment via regex fallback');
+        } catch (e2) {
+          console.log('Regex fallback also failed:', e2.message);
+          portfolioData.progressAssessment = {};
+        }
       }
     } else if (!portfolioData.progressAssessment || typeof portfolioData.progressAssessment !== 'object') {
       portfolioData.progressAssessment = {};
