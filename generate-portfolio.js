@@ -1,6 +1,6 @@
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, 
         LevelFormat, PageBreak, Table, TableRow, TableCell, WidthType, BorderStyle,
-        ImageRun } = require('docx');
+        ImageRun, Header, Footer, PageNumber } = require('docx');
 
 /**
  * OneHome Education Portfolio Generator
@@ -26,7 +26,8 @@ function generatePortfolio(portfolioData) {
     evidenceEntries = [],
     aiProgressSummaries = {},           // AI-generated progress summaries per area
     enhancedProgressAssessment = {},    // AI-enhanced parent assessments
-    enhancedFuturePlansOverview = null  // AI-enhanced future plans overview
+    enhancedFuturePlansOverview = null, // AI-enhanced future plans overview
+    logoBuffer = null                   // Logo image buffer
   } = portfolioData;
   
   // Use parentName or parentname (handle case sensitivity)
@@ -80,36 +81,68 @@ function generatePortfolio(portfolioData) {
   const children = [];
   
   // === TITLE PAGE ===
+  // Add logo if available
+  if (logoBuffer) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 200, after: 200 },
+        children: [
+          new ImageRun({
+            data: logoBuffer,
+            transformation: {
+              width: 150,
+              height: 150
+            },
+            type: 'jpeg'
+          })
+        ]
+      })
+    );
+  }
+  
   children.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: 400, after: 200 },
-      children: [new TextRun({ text: "Home Education Learning Portfolio", bold: true, size: 56 })]
+      spacing: { before: logoBuffer ? 100 : 400, after: 200 },
+      children: [new TextRun({ text: "Home Education Learning Portfolio", bold: true, size: 56, font: "Aptos" })]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
-      children: [new TextRun({ text: childName, size: 48 })]
+      children: [new TextRun({ text: childName, size: 48, font: "Aptos" })]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
-      children: [new TextRun({ text: yearLevel, size: 36 })]
+      children: [new TextRun({ text: yearLevel, size: 36, font: "Aptos" })]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
-      children: [new TextRun({ text: reportingPeriod, size: 36 })]
+      children: [new TextRun({ text: reportingPeriod, size: 36, font: "Aptos" })]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { after: 100 },
-      children: [new TextRun({ text: `Prepared by: ${finalParentName}`, size: 28 })]
+      children: [new TextRun({ text: `Prepared by: ${finalParentName}`, size: 28, font: "Aptos" })]
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { after: 400 },
-      children: [new TextRun({ text: `Date: ${currentDate}`, size: 28 })]
+      spacing: { after: 300 },
+      children: [new TextRun({ text: `Date: ${currentDate}`, size: 28, font: "Aptos" })]
+    }),
+    // Disclaimer
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 200, after: 100 },
+      shading: { fill: "F5F5F5" },
+      children: [new TextRun({ 
+        text: "This portfolio was generated using OneHome Education's automated portfolio system. Learning evidence and assessments were provided by the parent/carer and enhanced using AI assistance.", 
+        size: 18, 
+        italics: true,
+        font: "Aptos"
+      })]
     }),
     new Paragraph({ children: [new PageBreak()] })
   );
@@ -554,6 +587,54 @@ function generatePortfolio(portfolioData) {
             left: 1440
           }
         }
+      },
+      footers: {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ 
+                  text: "OneHome Education | Affirming Connections | ABN: 57 886 895 482", 
+                  size: 16, 
+                  font: "Aptos",
+                  color: "666666"
+                })
+              ]
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [
+                new TextRun({ 
+                  text: "www.affirmingconnections.com.au", 
+                  size: 16, 
+                  font: "Aptos",
+                  color: "666666"
+                })
+              ]
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 60 },
+              children: [
+                new TextRun({ text: "Page ", size: 16, font: "Aptos", color: "666666" }),
+                new TextRun({ 
+                  children: [PageNumber.CURRENT],
+                  size: 16, 
+                  font: "Aptos",
+                  color: "666666"
+                }),
+                new TextRun({ text: " of ", size: 16, font: "Aptos", color: "666666" }),
+                new TextRun({ 
+                  children: [PageNumber.TOTAL_PAGES],
+                  size: 16, 
+                  font: "Aptos",
+                  color: "666666"
+                })
+              ]
+            })
+          ]
+        })
       },
       children: children
     }]
