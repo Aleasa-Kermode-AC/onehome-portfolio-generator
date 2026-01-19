@@ -414,14 +414,22 @@ module.exports = async (req, res) => {
     }
     
     // === FIX 3: Parse progressAssessment if it's a string ===
+    console.log('progressAssessment type:', typeof portfolioData.progressAssessment);
+    console.log('progressAssessment raw:', JSON.stringify(portfolioData.progressAssessment)?.substring(0, 300));
+    
     if (typeof portfolioData.progressAssessment === 'string') {
       try {
         portfolioData.progressAssessment = JSON.parse(sanitizeJsonString(portfolioData.progressAssessment));
-        console.log('Parsed progressAssessment:', portfolioData.progressAssessment);
+        console.log('Parsed progressAssessment:', JSON.stringify(portfolioData.progressAssessment)?.substring(0, 300));
       } catch (e) {
-        console.log('Could not parse progressAssessment as JSON, using as-is');
+        console.log('Could not parse progressAssessment as JSON:', e.message);
+        // Try to extract values if it looks like a simple format
+        portfolioData.progressAssessment = {};
       }
     }
+    
+    // Log final progressAssessment structure
+    console.log('Final progressAssessment keys:', Object.keys(portfolioData.progressAssessment || {}));
     
     // === FIX 4: Parse evidenceEntries if it's a string ===
     if (typeof portfolioData.evidenceEntries === 'string') {
