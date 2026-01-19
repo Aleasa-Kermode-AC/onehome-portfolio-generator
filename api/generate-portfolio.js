@@ -2,6 +2,13 @@ const { generatePortfolio } = require('../generate-portfolio');
 const { Packer } = require('docx');
 const { put } = require('@vercel/blob');
 
+// Disable automatic body parsing so we can handle control characters
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
+
 // OpenAI API configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -323,12 +330,53 @@ module.exports = async (req, res) => {
     return obj;
   }
 
+  /**
+   * Sanitize raw JSON string before parsing
+   */
+  function sanitizeJsonString(jsonStr) {
+    if (typeof jsonStr !== 'string') return jsonStr;
+    // Remove control characters that break JSON parsing
+    // Keep only valid JSON whitespace: space, tab, newline, carriage return
+    return jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  }
+
+  /**
+   * Read raw body from request
+   */
+  function getRawBody(req) {
+    return new Promise((resolve, reject) => {
+      let data = '';
+      req.on('data', chunk => {
+        data += chunk;
+      });
+      req.on('end', () => {
+        resolve(data);
+      });
+      req.on('error', err => {
+        reject(err);
+      });
+    });
+  }
+
   try {
     console.log('=== PORTFOLIO GENERATION REQUEST ===');
     console.log('Request received at:', new Date().toISOString());
     
-    // Sanitize all input data to remove control characters
-    let portfolioData = sanitizeObject(req.body);
+    let portfolioData;
+    
+    // Read and parse raw body with sanitization
+    try {
+      const rawBody = await getRawBody(req);
+      console.log('Raw body length:', rawBody.length);
+      const sanitizedBody = sanitizeJsonString(rawBody);
+      portfolioData = JSON.parse(sanitizedBody);
+    } catch (parseError) {
+      console.error('Failed to parse request body:', parseError.message);
+      return res.status(400).json({ error: 'Invalid JSON in request body', details: parseError.message });
+    }
+    
+    // Sanitize all input data to remove any remaining control characters
+    portfolioData = sanitizeObject(portfolioData);
     
     // Log raw input for debugging
     console.log('Raw parentname:', portfolioData.parentname);
