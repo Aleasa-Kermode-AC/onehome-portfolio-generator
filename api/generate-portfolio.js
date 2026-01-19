@@ -5,6 +5,27 @@ const { put } = require('@vercel/blob');
 // OpenAI API configuration
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
+// OneHome Education Logo URL (hosted on GitHub or Vercel)
+const LOGO_URL = 'https://raw.githubusercontent.com/Aleasa-Kermode-AC/onehome-portfolio-generator/main/assets/OneHomeEd_Logo.jpg';
+
+/**
+ * Fetch the OneHome Education logo
+ */
+async function fetchLogo() {
+  try {
+    const response = await fetch(LOGO_URL);
+    if (!response.ok) {
+      console.log('Could not fetch logo:', response.status);
+      return null;
+    }
+    const arrayBuffer = await response.arrayBuffer();
+    return Buffer.from(arrayBuffer);
+  } catch (error) {
+    console.log('Error fetching logo:', error.message);
+    return null;
+  }
+}
+
 /**
  * Fetch image from URL and return as buffer
  */
@@ -589,6 +610,16 @@ module.exports = async (req, res) => {
       console.log('AI enhancements complete');
     } else {
       console.log('OpenAI API key not configured, skipping AI enhancements');
+    }
+    
+    // Fetch the logo
+    console.log('Fetching logo...');
+    const logoBuffer = await fetchLogo();
+    if (logoBuffer) {
+      portfolioData.logoBuffer = logoBuffer;
+      console.log('Logo fetched successfully');
+    } else {
+      console.log('Logo not available, continuing without logo');
     }
     
     // Generate the portfolio document
