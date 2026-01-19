@@ -259,7 +259,7 @@ function generatePortfolio(portfolioData) {
   );
   
   // Generate evidence sections - NO LONGER grouped by subject area
-  const evidenceSections = generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes);
+  const evidenceSections = generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes, state);
   children.push(...evidenceSections);
 
   // === SECTION 4: PARENT ASSESSMENT OF PROGRESS ===
@@ -798,8 +798,11 @@ function generateLearningAreaOverviews(learningAreaOverviews, evidenceByArea, cu
  * Generate flat evidence sections without duplicating entries across subject areas
  * Each evidence entry appears once with all its associated outcomes
  */
-function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
+function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes, state = 'NSW') {
   const sections = [];
+  
+  // Determine the outcomes label based on state
+  const outcomesLabel = state === 'NSW' ? 'Syllabus Outcomes Addressed:' : 'Curriculum Outcomes Addressed:';
   
   if (!evidenceByArea || typeof evidenceByArea !== 'object' || Object.keys(evidenceByArea).length === 0) {
     sections.push(
@@ -925,22 +928,30 @@ function generateEvidenceSectionsFlat(evidenceByArea, curriculumOutcomes) {
         });
       }
       
-      // Filter to NSW syllabus codes only
+      // Filter to syllabus/curriculum codes based on state
+      // NSW codes: EN2-xxx, MA2-xxx, ST2-xxx, HS2-xxx, PH2-xxx, CA2-xxx
+      // VIC & Australian Curriculum codes: AC9E4LA01, AC9M6N01, etc.
       const nswPattern = /^(EN|MA|ST|HS|PH|CA)\d-[A-Z]{2,6}-\d{2}$/;
+      const acPattern = /^AC9[A-Z]\d[A-Z]{1,2}\d{2}$/;
+      
       const filteredOutcomes = outcomesList
         .map(outcomeText => {
           let displayText = outcomeText.trim();
-          const codeMatch = displayText.match(/([A-Z]{2,3}\d?-[A-Z]{2,6}-\d{2})/);
-          if (codeMatch) displayText = codeMatch[1];
+          // Try to extract NSW code pattern
+          const nswMatch = displayText.match(/([A-Z]{2,3}\d?-[A-Z]{2,6}-\d{2})/);
+          if (nswMatch) return nswMatch[1];
+          // Try to extract AC code pattern
+          const acMatch = displayText.match(/(AC9[A-Z]\d[A-Z]{1,2}\d{2})/);
+          if (acMatch) return acMatch[1];
           return displayText;
         })
-        .filter(code => nswPattern.test(code));
+        .filter(code => nswPattern.test(code) || acPattern.test(code));
       
       if (filteredOutcomes.length > 0) {
         sections.push(
           new Paragraph({
             spacing: { before: 60, after: 60 },
-            children: [new TextRun({ text: "Syllabus Outcomes Addressed:", bold: true, font: "Aptos" })]
+            children: [new TextRun({ text: outcomesLabel, bold: true, font: "Aptos" })]
           })
         );
         
