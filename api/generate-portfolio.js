@@ -2,26 +2,46 @@ const { generatePortfolio } = require('../generate-portfolio');
 const { Packer } = require('docx');
 const { put } = require('@vercel/blob');
 
-// This function runs AFTER we've already responded 202 to Make.com
-async function processPortfolio(portfolioData) {
-  const recordId = portfolioData.recordId;
+// Helper to normalize arrays from Make.com (sometimes sends objects instead of arrays)
+function toArray(val) {
+  if (Array.isArray(val)) return val;
+  if (!val) return [];
+  if (typeof val === 'object') return Object.values(val).filter(v => v !== null && v !== undefined);
+  return [];
+}
+
+module.exports = async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      status: 'healthy',
+      service: 'OneHome Education Portfolio Generator',
+      version: '3.0.0',
+      mode: 'synchronous',
+    });
+  }
+
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const portfolioData = req.body;
+
+  if (!portfolioData || !portfolioData.childName) {
+    return res.status(400).json({ success: false, error: 'Missing required field: childName' });
+  }
 
   try {
-    console.log('Background processing started for record:', recordId);
+    console.log('Portfolio generation started for:', portfolioData.childName);
 
-    // Normalize any fields that should be arrays but may arrive as objects from Make.com
-    function toArray(val) {
-      if (Array.isArray(val)) return val;
-      if (!val) return [];
-      if (typeof val === 'object') return Object.values(val).filter(v => v !== null && v !== undefined);
-      return [];
-    }
-
+    // Normalize arrays
     portfolioData.curriculumOutcomes = toArray(portfolioData.curriculumOutcomes);
     portfolioData.evidenceEntries = toArray(portfolioData.evidenceEntries);
     portfolioData.learningAreaOverviews = toArray(portfolioData.learningAreaOverviews);
 
-    // evidenceByArea is an object of arrays — normalize each key
     if (portfolioData.evidenceByArea && typeof portfolioData.evidenceByArea === 'object') {
       Object.keys(portfolioData.evidenceByArea).forEach(key => {
         portfolioData.evidenceByArea[key] = toArray(portfolioData.evidenceByArea[key]);
@@ -45,112 +65,19 @@ async function processPortfolio(portfolioData) {
     });
     console.log('Uploaded to Blob:', blob.url);
 
-    // Write URL + status back to Airtable
-    const airtableBaseId = process.env.AIRTABLE_BASE_ID;
-    const airtableApiKey = process.env.AIRTABLE_API_KEY;
-
-    if (!airtableBaseId || !airtableApiKey) {
-      throw new Error('Missing AIRTABLE_BASE_ID or AIRTABLE_API_KEY environment variables');
-    }
-
-    const airtableResponse = await fetch(
-      `https://api.airtable.com/v0/${airtableBaseId}/Portfolio%20Requests/${recordId}`,
-      {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${airtableApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          fields: {
-            'Generated Document URL': blob.url,
-            Status: 'Complete',
-          },
-        }),
-      }
-    );
-
-    if (!airtableResponse.ok) {
-      const errText = await airtableResponse.text();
-      throw new Error(`Airtable update failed: ${errText}`);
-    }
-
-    console.log('Airtable updated successfully for record:', recordId);
+    // Return URL to Make.com - Make.com will update Airtable
+    return res.status(200).json({
+      success: true,
+      filename: filename,
+      url: blob.url,
+      fileSize: buffer.length,
+    });
 
   } catch (error) {
-    console.error('Background processing error for record:', recordId, error.message);
-
-    // Try to write the error status back to Airtable so the user knows it failed
-    try {
-      const airtableBaseId = process.env.AIRTABLE_BASE_ID;
-      const airtableApiKey = process.env.AIRTABLE_API_KEY;
-      if (airtableBaseId && airtableApiKey && recordId) {
-        await fetch(
-          `https://api.airtable.com/v0/${airtableBaseId}/Portfolio%20Requests/${recordId}`,
-          {
-            method: 'PATCH',
-            headers: {
-              Authorization: `Bearer ${airtableApiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              fields: {
-                Status: 'Error',
-              },
-            }),
-          }
-        );
-      }
-    } catch (airtableErr) {
-      console.error('Could not write error status to Airtable:', airtableErr.message);
-    }
-  }
-}
-
-module.exports = async (req, res) => {
-  // Handle CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // Health check
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      status: 'healthy',
-      service: 'OneHome Education Portfolio Generator',
-      version: '2.0.0',
-      mode: 'async',
+    console.error('Error generating portfolio:', error.message);
+    return res.status(500).json({
+      success: false,
+      error: error.message,
     });
   }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const portfolioData = req.body;
-
-  // Basic validation
-  if (!portfolioData || !portfolioData.childName) {
-    return res.status(400).json({ success: false, error: 'Missing required field: childName' });
-  }
-
-  if (!portfolioData.recordId) {
-    return res.status(400).json({ success: false, error: 'Missing required field: recordId — needed to write result back to Airtable' });
-  }
-
-  // Respond immediately so Make.com doesn't time out
-  res.status(202).json({
-    success: true,
-    message: 'Portfolio generation started. Result will be written directly to Airtable.',
-    recordId: portfolioData.recordId,
-  });
-
-  // Process in background (Vercel Fluid Compute keeps the function alive after response)
-  processPortfolio(portfolioData).catch((err) => {
-    console.error('Unhandled error in processPortfolio:', err);
-  });
 };
