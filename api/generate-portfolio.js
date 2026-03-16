@@ -9,6 +9,25 @@ async function processPortfolio(portfolioData) {
   try {
     console.log('Background processing started for record:', recordId);
 
+    // Normalize any fields that should be arrays but may arrive as objects from Make.com
+    function toArray(val) {
+      if (Array.isArray(val)) return val;
+      if (!val) return [];
+      if (typeof val === 'object') return Object.values(val).filter(v => v !== null && v !== undefined);
+      return [];
+    }
+
+    portfolioData.curriculumOutcomes = toArray(portfolioData.curriculumOutcomes);
+    portfolioData.evidenceEntries = toArray(portfolioData.evidenceEntries);
+    portfolioData.learningAreaOverviews = toArray(portfolioData.learningAreaOverviews);
+
+    // evidenceByArea is an object of arrays — normalize each key
+    if (portfolioData.evidenceByArea && typeof portfolioData.evidenceByArea === 'object') {
+      Object.keys(portfolioData.evidenceByArea).forEach(key => {
+        portfolioData.evidenceByArea[key] = toArray(portfolioData.evidenceByArea[key]);
+      });
+    }
+
     // Generate the DOCX
     const doc = generatePortfolio(portfolioData);
     const buffer = await Packer.toBuffer(doc);
