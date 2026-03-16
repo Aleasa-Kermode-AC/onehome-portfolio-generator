@@ -1,11 +1,9 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "api/generate-portfolio.js",
-      "use": "@vercel/node"
+  "functions": {
+    "api/generate-portfolio.js": {
+      "maxDuration": 300
     }
-  ],
+  },
   "routes": [
     {
       "src": "/generate-portfolio",
