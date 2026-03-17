@@ -3,7 +3,6 @@ const { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType,
         ImageRun, Header, Footer, PageNumber } = require('docx');
 const { put } = require('@vercel/blob');
 
-
 // ============================================================
 // HELPER FUNCTIONS
 // ============================================================
@@ -47,13 +46,29 @@ function buildEvidenceByArea(evidenceEntries) {
   const byArea = {};
   evidenceEntries.forEach(entry => {
     let areas = [];
-    const rawAreas = entry['Learning Areas'] || entry.learningAreas || entry.Areas || entry.areas;
+
+    // Try all possible field names for learning areas
+    const rawAreas = entry['Learning Areas'] || entry.learningAreas || 
+                     entry.Areas || entry.areas ||
+                     entry['Curriculum Learning Area'] || entry.curriculumLearningArea;
+
     if (rawAreas) {
-      if (Array.isArray(rawAreas)) areas = rawAreas;
-      else if (typeof rawAreas === 'string') areas = rawAreas.split(',').map(a => a.trim());
+      if (Array.isArray(rawAreas)) {
+        areas = rawAreas;
+      } else if (typeof rawAreas === 'string') {
+        // Handle comma-separated string, possibly with quoted values
+        // e.g. "English, Science & Technology, \"PDHPE (Health, Physical Education)\""
+        areas = rawAreas
+          .replace(/"/g, '') // remove quotes
+          .split(',')
+          .map(a => a.trim())
+          .filter(a => a.length > 0);
+      }
     }
+
     areas = [...new Set(areas.map(normalizeAreaName).filter(a => a && a !== 'Other'))];
     if (areas.length === 0) areas = ['Other'];
+    console.log('Evidence entry areas:', entry.Title || entry.title, '->', areas);
 
     const evidenceObj = {
       title: entry.Title || entry.title || 'Untitled',
@@ -507,7 +522,7 @@ module.exports = async (req, res) => {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'healthy', service: 'OneHome Education Portfolio Generator', version: '4.0.1', mode: 'self-contained' });
+    return res.status(200).json({ status: 'healthy', service: 'OneHome Education Portfolio Generator', version: '4.0.0', mode: 'self-contained' });
   }
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
